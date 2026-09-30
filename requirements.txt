@@ -1,0 +1,22 @@
+# Core Backend & Async Web Framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+websockets>=12.0
+python-dotenv>=1.0.0
+pydantic>=2.6.0
+starlette>=0.36.0
+
+# Numerical, Vision & MediaPipe
+numpy>=1.24.0,<2.0.0
+opencv-python>=4.8.0.76
+mediapipe>=0.10.9
+
+# Machine Learning & Inference
+tensorflow>=2.13.0,<2.16.0
+scikit-learn>=1.3.0
+pyyaml>=6.0.1
+
+# HTTP Client & SLM Integration
+requests>=2.31.0
+httpx>=0.27.0
+google-genai>=0.1.0

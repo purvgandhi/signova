@@ -1,0 +1,14 @@
+# Secrets never go into the image; pass them as environment variables instead
+.env
+.env.*
+!.env.example
+
+# Local-only folders
+_backup_pre_redesign/
+.claude/
+reports/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.git/

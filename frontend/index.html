@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signova — Sign Language to Regional Language in Real Time</title>
+  <meta name="description" content="Signova turns sign language into natural sentences and five Indian languages in real time, using MediaPipe landmarks, an LSTM recognizer and a local language model.">
+  <meta name="theme-color" content="#2563EB">
+
+  <!-- Google Fonts: Plus Jakarta Sans, Inter, JetBrains Mono, Noto Sans Devanagari -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    // Force purge old service worker caches on page load
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (let r of regs) { r.unregister(); }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(keys) {
+        for (let k of keys) { caches.delete(k); }
+      });
+    }
+  </script>
+  <script>
+    // Decide before first paint: every fresh load of the home page opens with the intro video,
+    // so the home page is covered from the very first frame. Direct /studio links and
+    // reduced-motion visitors go straight in.
+    (function () {
+      try {
+        var h = (location.hash || '').toLowerCase();
+        var p = (location.pathname || '').toLowerCase();
+        var forced = /[?&]intro=1/.test(location.search);
+        var landing = p.indexOf('studio') === -1 && (!h || h === '#landing');
+        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (forced || (landing && !reduced)) document.documentElement.classList.add('play-intro');
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css?v=8.0">
+  <link rel="stylesheet" href="landing.css?v=8.0">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+</head>
+<body data-theme="dark">
+
+  <!-- ==================================================================== -->
+  <!-- LOW-POLY BACKGROUND TEXTURE & OVERLAYS                               -->
+  <!-- ==================================================================== -->
+  <div class="bg-texture-layer" aria-hidden="true">
+    <img class="poly-svg-mesh" src="poly-bg.svg" alt="" />
+    <div class="poly-dark-overlay"></div>
+    <div class="poly-grain-filter"></div>
+  </div>
+
+  <!-- Offline PWA Banner -->
+  <div id="offline-banner" class="offline-banner" role="alert" style="display: none;">
+    <svg class="icon-inline" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    Offline Mode Active — Local 100-sentence SLM and Devanagari dictionary ready.
+  </div>
+
+  <!-- Hidden compatibility spans for header title / icon references -->
+  <span id="current-page-title" style="display:none;">Live Studio</span>
+  <span id="current-view-icon" style="display:none;">🖐</span>
+
+  <!-- ==================================================================== -->
+  <!-- OPENING: full-screen two-hand video, then crush + glass burst        -->
+  <!-- ==================================================================== -->
+  <div id="intro-cinematic" class="intro-cinematic" hidden>
+    <video id="intro-video" class="intro-video" muted playsinline preload="none" disablepictureinpicture
+           poster="assets/videos/intro-poster.jpg" aria-hidden="true" tabindex="-1"></video>
+    <canvas id="intro-canvas" aria-hidden="true"></canvas>
+    <button type="button" id="btn-skip-intro" class="intro-skip-btn" aria-label="Skip intro">
+      <span>Skip intro</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+    </button>
+  </div>
+  <script>
+    // Start the opening video as early as possible (only when the intro will actually play)
+    (function () {
+      var v = document.getElementById('intro-video');
+      var saveData = navigator.connection && navigator.connection.saveData;
+      if (!v || saveData || !document.documentElement.classList.contains('play-intro')) return;
+      v.src = 'assets/videos/intro.mp4';
+      v.muted = true;
+      var p = v.play();
+      if (p && p.catch) p.catch(function () { v.dataset.blocked = '1'; });
+    })();
+  </script>
+
+  <!-- Cursor-following glow (landing only, pointer devices only) -->
+  <div id="cursor-glow" class="cursor-glow" aria-hidden="true"></div>
+
+  <!-- ==================================================================== -->
+  <!-- PART A: LANDING PAGE — SCROLL-DRIVEN STORY                           -->
+  <!-- ==================================================================== -->
+  <div id="view-landing" class="view-section">
+    <!-- Sticky Landing Header -->
+    <header class="landing-header">
+      <div class="header-branding" id="btn-landing-brand-logo" role="button" tabindex="0" aria-label="Signova home">
+        <div class="logo-square" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
+            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+          </svg>
+        </div>
+        <span class="brand-name">Signova</span>
+        <span class="studio-pill">STUDIO</span>
+      </div>
+
+      <!-- Section links with sliding active indicator -->
+      <nav class="landing-nav-links" aria-label="Landing Page Sections">
+        <a class="landing-nav-link" href="#features" data-target="sec-features">Features</a>
+        <a class="landing-nav-link" href="#pipeline" data-target="sec-pipeline">Pipeline</a>
+        <a class="landing-nav-link" href="#studio" data-target="sec-studio">Live Studio</a>
+        <a class="landing-nav-link" href="#research" data-target="sec-research">Research</a>
+        <span class="nav-active-indicator" aria-hidden="true"></span>
+      </nav>
+
+      <div class="landing-header-actions">
+        <button type="button" class="btn btn-secondary btn-sm btn-theme-toggle" title="Toggle Light / Dark Theme">
+          <svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <span class="theme-btn-text">Theme: <strong class="theme-mode-label">Dark</strong></span>
+        </button>
+        <button type="button" id="btn-launch-studio-header" class="btn btn-primary btn-sm magnetic">
+          <span>Launch Studio →</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="landing-story">
+
+      <!-- ============================ HERO ============================ -->
+      <section class="story-section hero-section" id="sec-hero" aria-labelledby="hero-title">
+        <div class="hero-depth-orbs" aria-hidden="true">
+          <span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span>
+        </div>
+        <canvas id="hero-bg-canvas" class="hero-bg-canvas" aria-hidden="true"></canvas>
+
+        <div class="hero-single">
+          <div class="landing-hero-left glass-panel" data-parallax="0.35">
+            <h1 class="hero-title" id="hero-title">
+              <span class="hero-wordmark" aria-label="Signova">SIGNOVA</span>
+              <span class="hero-title-line reveal-words">When hands speak, <span class="highlight">language follows</span>.</span>
+            </h1>
+
+            <div class="hero-pill-badge">
+              <span class="status-dot blue"></span>
+              <span>SIGN LANGUAGE</span><span class="pill-arrow">→</span><span>AI RECOGNITION</span><span class="pill-arrow">→</span><span>NATURAL LANGUAGE</span>
+            </div>
+
+            <p class="hero-paragraph">
+              Real-time optical gesture recognition paired with small language models for instant regional speech translation.
+            </p>
+
+            <div class="hero-cta-group">
+              <button type="button" id="btn-launch-studio-hero" class="btn btn-primary magnetic btn-glow">
+                <span>→ Launch Studio</span>
+              </button>
+              <button type="button" id="btn-read-paper" class="btn btn-secondary magnetic">
+                <svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <span>Read the Paper</span>
+              </button>
+            </div>
+
+            <!-- Benchmark stats (values from BENCHMARK_METRICS in app.js; counted up on reveal) -->
+            <div class="hero-stats-row">
+              <div class="hero-stat-cell">
+                <span class="hero-stat-val count-up" id="stat-landing-accuracy">98.4%</span>
+                <span class="hero-stat-lbl">Recognition Accuracy</span>
+              </div>
+              <div class="hero-stat-cell">
+                <span class="hero-stat-val count-up" id="stat-landing-signs">20</span>
+                <span class="hero-stat-lbl">Trained Signs</span>
+              </div>
+              <div class="hero-stat-cell">
+                <span class="hero-stat-val count-up" id="stat-landing-langs">5</span>
+                <span class="hero-stat-lbl">Local Languages</span>
+              </div>
+              <div class="hero-stat-cell">
+                <span class="hero-stat-val count-up" id="stat-landing-latency">&lt; 50 ms</span>
+                <span class="hero-stat-lbl">SLM Latency</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================== FEATURES (2 columns) ========================== -->
+      <section class="story-section compact" id="sec-features" aria-labelledby="features-title">
+        <div class="section-head reveal">
+          <span class="section-kicker">What Signova does</span>
+          <h2 class="section-title" id="features-title">From a webcam to five Indian languages.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card glass-panel reveal tilt" style="--d:0">
+            <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="5" r="2"/><circle cx="6" cy="10" r="2"/><circle cx="18" cy="10" r="2"/><circle cx="12" cy="19" r="2"/><path d="M12 7v10M7.5 11.5 11 17.5M16.5 11.5 13 17.5"/></svg></span>
+            <div><h3>21-point landmarks</h3><p>MediaPipe tracks 21 3D points per hand in the browser. No gloves or depth sensors.</p></div>
+          </article>
+          <article class="feature-card glass-panel reveal tilt" style="--d:1">
+            <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span>
+            <div><h3>RF + LSTM recognition</h3><p>A Keras LSTM reads 30-frame windows across 20 signs, gated at ≥ 70% confidence.</p></div>
+          </article>
+          <article class="feature-card glass-panel reveal tilt" style="--d:2">
+            <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <div><h3>Sentence AI</h3><p>Accepted signs become natural English from local templates, with an optional Gemini fallback.</p></div>
+          </article>
+          <article class="feature-card glass-panel reveal tilt" style="--d:3">
+            <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+            <div><h3>5 regional languages</h3><p>Marathi · Hindi · Gujarati · Tamil · Telugu, translated offline and spoken aloud.</p></div>
+          </article>
+          <article class="feature-card glass-panel reveal tilt" style="--d:4">
+            <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+            <div><h3>Real-time streaming</h3><p>126-float landmark packets over a WebSocket, with a state machine that stops duplicate signs.</p></div>
+          </article>
+          <article class="feature-card glass-panel reveal tilt" style="--d:5">
+            <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
+            <div><h3>Built for emergencies</h3><p>Help, doctor, pain, water: the signs that matter most, understood in seconds.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ======================= PIPELINE (one row) ======================= -->
+      <section class="story-section compact" id="sec-pipeline" aria-labelledby="pipeline-title">
+        <div class="section-head reveal">
+          <span class="section-kicker">AI Pipeline</span>
+          <h2 class="section-title" id="pipeline-title">Hand → Landmarks → RF + LSTM → Sentence → Language</h2>
+        </div>
+        <div class="pipeline-track reveal" id="pipeline-track" role="tablist" aria-label="AI pipeline stages">
+          <span class="pipeline-particle" id="pipeline-particle" aria-hidden="true"></span>
+        </div>
+        <div class="pipeline-detail glass-panel reveal" id="pipeline-detail" role="tabpanel" aria-live="polite">
+          <div class="pipeline-detail-head">
+            <span class="pipeline-step-num" id="pipeline-detail-num">01 / 05</span>
+            <h3 class="pipeline-step-title" id="pipeline-detail-title">Hand</h3>
+          </div>
+          <p id="pipeline-detail-body"></p>
+          <div class="pipeline-detail-tech" id="pipeline-detail-tech"></div>
+        </div>
+      </section>
+
+      <!-- ========================= LIVE STUDIO ========================= -->
+      <section class="story-section compact" id="sec-studio" aria-labelledby="studio-title">
+        <div class="studio-box glass-panel reveal animated-border" id="studio-box">
+          <div class="studio-box-head">
+            <div>
+              <span class="section-kicker">Live Signova Studio</span>
+              <h2 class="section-title" id="studio-title">Watch signs become speech.</h2>
+            </div>
+            <div class="gesture-presets" role="group" aria-label="Example sign sequences">
+              <button type="button" class="gesture-preset active" data-signs="help doctor pain">HELP · DOCTOR · PAIN</button>
+              <button type="button" class="gesture-preset" data-signs="help doctor">HELP · DOCTOR</button>
+              <button type="button" class="gesture-preset" data-signs="please help">PLEASE · HELP</button>
+              <button type="button" class="gesture-preset" data-signs="hello">HELLO</button>
+            </div>
+          </div>
+
+          <div class="studio-box-grid">
+            <!-- Left: camera / hand -->
+            <div class="studio-cam">
+              <div class="preview-mock-screen">
+                <div class="preview-hud-tag">OPTICAL 21-PT TRACKING</div>
+                <span class="tech-chip mono-val studio-state" id="studio-state-badge" data-state="IDLE">IDLE</span>
+                <canvas id="studio-hand-canvas" aria-label="Animated 21-point hand landmark wireframe" role="img"></canvas>
+                <span class="camera-frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                <div class="hero-gauge" aria-hidden="true">
+                  <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" class="hero-gauge-track"/><circle cx="22" cy="22" r="18" class="hero-gauge-fill" id="studio-gauge-fill"/></svg>
+                  <span class="hero-gauge-pct mono-val" id="studio-gauge-pct">0%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: detected → sentence → translation -->
+            <div class="studio-out gx" id="gx">
+              <div class="gx-block">
+                <span class="gx-label">Detected signs</span>
+                <div class="gx-signs" id="gx-signs"><svg class="gx-links" id="gx-links" aria-hidden="true"></svg></div>
+                <div class="gx-context mono-val" id="gx-context"></div>
+              </div>
+              <div class="gx-block">
+                <span class="gx-label">Natural sentence</span>
+                <p class="gx-sentence" id="gx-sentence" aria-live="polite"></p>
+              </div>
+              <div class="gx-block">
+                <div class="gx-langs" role="tablist" aria-label="Regional language">
+                  <button type="button" class="gx-lang active" role="tab" aria-selected="true" data-lang="Marathi">मराठी</button>
+                  <button type="button" class="gx-lang" role="tab" aria-selected="false" data-lang="Hindi">हिंदी</button>
+                  <button type="button" class="gx-lang" role="tab" aria-selected="false" data-lang="Gujarati">ગુજરાતી</button>
+                  <button type="button" class="gx-lang" role="tab" aria-selected="false" data-lang="Tamil">தமிழ்</button>
+                  <button type="button" class="gx-lang" role="tab" aria-selected="false" data-lang="Telugu">తెలుగు</button>
+                </div>
+                <div class="gx-translation-row">
+                  <p class="gx-translation" id="gx-translation" aria-live="polite"></p>
+                  <button type="button" class="btn btn-secondary btn-sm" id="gx-speak">Speak</button>
+                </div>
+                <span class="gx-source mono-val" id="gx-source"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="studio-box-foot">
+            <div class="studio-status-strip" id="studio-status-strip" aria-live="polite">
+              <span class="studio-status-item" data-k="engine"><span class="status-dot"></span>Engine <b>checking…</b></span>
+              <span class="studio-status-item" data-k="model"><span class="status-dot"></span>LSTM <b>checking…</b></span>
+              <span class="studio-status-item" data-k="socket"><span class="status-dot"></span>Socket <b>checking…</b></span>
+              <span class="studio-status-item" data-k="slm"><span class="status-dot"></span>Language <b>checking…</b></span>
+            </div>
+            <button type="button" class="btn btn-primary magnetic btn-glow" id="btn-launch-studio-showcase">Try it with your camera →</button>
+          </div>
+          <p class="studio-note">Sentences and translations above come from this server's sentence and translation engines. The hand animation is illustrative; the real studio tracks your own hands.</p>
+        </div>
+      </section>
+
+      <!-- ===================== RESEARCH + DEMO (side by side) ===================== -->
+      <section class="story-section compact" id="sec-research" aria-labelledby="research-title">
+        <div class="research-demo-grid single">
+          <article class="research-card glass-panel reveal">
+            <span class="section-kicker">Research · Technology</span>
+            <h2 class="section-title small" id="research-title">Real-Time Indian Sign Language to Multilingual Regional Speech</h2>
+            <ul class="research-list">
+              <li><b>Vision</b> <span>MediaPipe Hands (WASM), server fallback</span></li>
+              <li><b>Model</b> <span>RF baseline + Keras LSTM, tensor (1, 30, 126)</span></li>
+              <li><b>Gating</b> <span>IDLE → DETECTING → STABLE → ACCEPTED → COOLDOWN</span></li>
+              <li><b>Language</b> <span>local templates + word packs, optional Gemini</span></li>
+              <li><b>Transport</b> <span>FastAPI, <code>/ws/recognition</code>, <code>/api/sentence</code></span></li>
+            </ul>
+            <button type="button" id="btn-paper" class="btn btn-secondary magnetic">Read the abstract</button>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- ========================= FINAL CTA ========================= -->
+      <section class="story-section compact final-cta-section" id="sec-cta" aria-labelledby="cta-title">
+        <div class="final-cta glass-panel reveal">
+          <div>
+            <h2 class="section-title small" id="cta-title">Break the barrier in real time.</h2>
+            <p class="section-lead">Gesture → AI → Understanding → Language.</p>
+          </div>
+          <button type="button" class="btn btn-primary magnetic btn-glow" id="btn-launch-studio-final">→ Launch Live Studio</button>
+        </div>
+      </section>
+
+      <footer class="landing-footer">
+        <span>© Signova · Real-Time Sign-to-Speech SLM Bridge</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- PART B: LIVE STUDIO (Locked to Viewport, 3-Column Grid)             -->
+  <!-- ==================================================================== -->
+  <div id="studio-wrapper">
+    <!-- Studio Header (~52px) -->
+    <header class="studio-header">
+      <div class="header-branding" id="btn-studio-brand-logo" title="Assistive Sign-to-Local Language SLM Bridge">
+        <div class="logo-square" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"></path>
+            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"></path>
+            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"></path>
+            <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"></path>
+          </svg>
+        </div>
+        <span class="brand-name">Signova</span>
+        <span class="studio-pill">STUDIO</span>
+      </div>
+
+      <!-- Compact Dot-Style Status Pills -->
+      <div class="studio-status-pills-row" role="status" aria-label="System Status">
+        <div id="badge-backend-status" class="status-pill-compact" title="Engine Status">
+          <span class="status-dot green"></span>
+          <span>ENGINE</span>
+        </div>
+        <div id="badge-ws-status" class="status-pill-compact" title="WebSocket Socket: Connected">
+          <span class="status-dot green"></span>
+          <span>SOCKET</span>
+        </div>
+        <div id="badge-camera-status" class="status-pill-compact" title="Webcam Feed: Idle">
+          <span class="status-dot"></span>
+          <span>CAMERA</span>
+        </div>
+        <div class="status-pill-compact profile-pill" title="Active Signer Profile">
+          <svg class="icon-inline" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="header-active-profile-name">Standard</span>
+        </div>
+      </div>
+
+      <!-- Studio Header Right: Theme Toggle & Quick Help -->
+      <div class="studio-header-right">
+        <!-- Brightness Slider Popover -->
+        <div id="theme-brightness-popover" class="theme-popover" style="display: none;">
+          <div class="theme-popover-title">Display Settings</div>
+          <div class="brightness-slider-wrap">
+            <label for="brightness-slider">
+              <span>Brightness</span>
+              <span id="brightness-val-lbl">100%</span>
+            </label>
+            <input type="range" id="brightness-slider" min="0.7" max="1.3" step="0.05" value="1.0">
+          </div>
+        </div>
+
+        <button type="button" id="btn-theme-toggle" class="btn btn-secondary btn-sm btn-theme-toggle" title="Toggle Light / Dark Theme">
+          <svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <span>Theme: <strong id="theme-mode-label">Dark</strong></span>
+        </button>
+
+        <button type="button" id="btn-open-help-card" class="btn btn-secondary btn-icon" title="Open Emergency Quick Help Card">
+          <svg class="icon-inline" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Studio Body: Sidebar Rail + Main Workspace -->
+    <div class="studio-body-layout">
+      <!-- Sidebar (64px rail below 1600px, 220px >= 1600px) -->
+      <aside class="studio-sidebar" aria-label="Main Navigation">
+        <!-- Return to Landing Home Button -->
+        <button type="button" class="nav-tab btn-nav-home" id="btn-nav-home" title="Return to Landing Page">
+          <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span class="nav-tab-label">Home</span>
+        </button>
+
+        <div class="sidebar-section-title">STUDIO</div>
+
+        <nav class="studio-sidebar-nav" role="tablist" aria-label="Navigation Tabs">
+          <button type="button" class="nav-tab nav-item active" data-view="view-studio" role="tab" aria-selected="true" title="Live Studio">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+            <span class="nav-tab-label">Live Studio</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-conversation" role="tab" aria-selected="false" title="Two-Way Conversation">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="nav-tab-label">Conversation</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-translate" role="tab" aria-selected="false" title="Translation Workbench">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span class="nav-tab-label">Translate</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-history" role="tab" aria-selected="false" title="History Log">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span class="nav-tab-label">History</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-phrases" role="tab" aria-selected="false" title="Phrases & Word Packs">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span class="nav-tab-label">Phrases</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-learn" role="tab" aria-selected="false" title="Learn Mode">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+            <span class="nav-tab-label">Learn</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-analytics" role="tab" aria-selected="false" title="Studio Analytics">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span class="nav-tab-label">Analytics</span>
+          </button>
+          <button type="button" class="nav-tab nav-item" data-view="view-settings" role="tab" aria-selected="false" title="Profiles & Settings">
+            <svg class="icon-inline" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="nav-tab-label">Settings</span>
+          </button>
+        </nav>
+
+        <!-- Sidebar Profile Chip -->
+        <div class="studio-sidebar-footer">
+          <div class="sidebar-profile-avatar" title="Active Signer Profile: Standard Signer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="sidebar-profile-name-text">
+            <span style="font-size: 10px; color: var(--muted); font-weight: 700;">PROFILE</span>
+            <span id="sidebar-profile-name" style="font-size: 12px; font-weight: 600; color: var(--heading);">Standard Signer</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Studio Main Workspace -->
+      <main class="studio-main-workspace">
+
+        <!-- ============================================================== -->
+        <!-- VIEW 1: LIVE STUDIO (3 Columns Grid: 1.35fr 1fr 0.85fr)         -->
+        <!-- ============================================================== -->
+        <section id="view-studio" class="view-section active-view">
+          <div class="studio-three-col-grid">
+
+            <!-- ========================================================== -->
+            <!-- COLUMN 1: LIVE VISION STREAM (Optical Hand Tracking)        -->
+            <!-- ========================================================== -->
+            <div class="studio-grid-col">
+              <div class="card card-live-vision">
+                <!-- One-line Header -->
+                <div class="card-title-compact-row">
+                  <span class="card-section-label-blue">Optical Hand Tracking</span>
+                  <div class="tech-badges-group">
+                    <span class="tech-chip mono-val" id="cam-fps-display">0.0 FPS</span>
+                    <span class="tech-chip mono-val" id="cam-resolution-display">640×480</span>
+                  </div>
+                </div>
+
+                <!-- Video / Placeholder Area (Aspect Ratio 4/3, Mirrored) -->
+                <div class="camera-stream-wrapper">
+                  <video id="webcam" autoplay playsinline muted></video>
+                  <canvas id="landmark-canvas" width="640" height="480"></canvas>
+
+                  <!-- Inactive Camera Overlay Placeholder -->
+                  <!-- Recognition engine connection state (shown only while /ws/recognition is down) -->
+                  <div id="ws-connection-overlay" class="ws-connection-overlay" role="status" aria-live="polite">
+                    <span class="ws-spinner" aria-hidden="true"></span>
+                    <strong>Recognition engine offline</strong>
+                    <span>Reconnecting to the server. No signs are being recognized right now.</span>
+                  </div>
+                  <span class="camera-frame-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+
+                  <div id="camera-idle-placeholder" class="camera-placeholder-overlay">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="1.75"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.934a.5.5 0 0 0-.777-.416L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+                    <span style="font-weight: 600; color: #F8FAFC;">Camera Stream Inactive</span>
+                    <button type="button" id="btn-start-camera-overlay" class="btn btn-primary btn-sm" style="margin-top: 4px;">
+                      Start Live Camera
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Floating Controls Bar (Solid Surface, No Backdrop Blur) -->
+                <div class="camera-controls-bar">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="status-dot" id="camera-status-dot"></span>
+                    <span id="camera-overlay-label" style="font-size: 11px; font-weight: 700;">Status: Idle</span>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <button type="button" id="btn-toggle-landmarks" class="btn btn-secondary btn-sm" title="Toggle Landmarks Skeleton">
+                      Landmarks: ON
+                    </button>
+                    <button type="button" id="btn-toggle-pause" class="btn btn-secondary btn-sm" title="Pause Frame Streaming">
+                      Pause
+                    </button>
+                    <button type="button" id="btn-toggle-camera" class="btn btn-primary btn-sm">
+                      Start Camera
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Telemetry: Session Buffer n/20 & Hold Stability % -->
+                <div class="stream-telemetry-row">
+                  <div class="telemetry-progress-cell">
+                    <div class="telemetry-progress-header">
+                      <span>Session Buffer</span>
+                      <span class="mono-val" id="hud-buffer-counter">0 / 20</span>
+                    </div>
+                    <div class="progress-track">
+                      <div class="progress-fill-blue" id="hud-buffer-progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <span id="hud-version-badge" style="display:none;">v0</span>
+                  </div>
+
+                  <div class="telemetry-progress-cell">
+                    <div class="telemetry-progress-header">
+                      <span>Hold Stability</span>
+                      <span class="mono-val" id="telemetry-stability-pct">0%</span>
+                    </div>
+                    <div class="progress-track">
+                      <div class="progress-fill-green" id="stability-progress" style="width: 0%;"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Compact 4-Cell Indicators Strip (No Clipping, No Overlap) -->
+                <div class="pipeline-indicators-strip">
+                  <div class="indicator-cell" id="stat-cam-indicator">
+                    <span class="status-dot"></span>
+                    <span>CAMERA</span>
+                  </div>
+                  <div class="indicator-cell" id="stat-mp-indicator">
+                    <span class="status-dot green"></span>
+                    <span>MEDIAPIPE</span>
+                  </div>
+                  <div class="indicator-cell" id="stat-lstm-indicator">
+                    <span class="status-dot green"></span>
+                    <span>LSTM MODEL</span>
+                  </div>
+                  <div class="indicator-cell" id="stat-lang-indicator">
+                    <span class="status-dot green"></span>
+                    <span>LOCAL LANG</span>
+                  </div>
+                  <span id="stat-socket-indicator" style="display:none;"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========================================================== -->
+            <!-- COLUMN 2: SENTENCE + TRANSLATION + DETECTED SIGNS           -->
+            <!-- ========================================================== -->
+            <div class="studio-grid-col">
+              <!-- Card A: AI Reconstructed Sentence (Auto Height) -->
+              <div class="card card-ai-sentence">
+                <div class="card-title-compact-row">
+                  <span class="card-section-label-blue">AI Reconstructed Sentence</span>
+                  <div class="tech-badges-group">
+                    <span class="tech-chip" id="sentence-source-badge">SLM EXACT</span>
+                    <span class="tech-chip mono-val" id="sentence-latency-badge">READY</span>
+                  </div>
+                </div>
+
+                <div id="ai-sentence-display" class="ai-sentence-text placeholder-text">
+                  Waiting for sign gesture sequence...
+                </div>
+
+                <!-- Gemini sentence-formation layer (extra output; detected words stay unchanged) -->
+                <div class="gemini-sentence-row" aria-live="polite">
+                  <span class="gemini-sentence-label">Generated Sentence</span>
+                  <span id="gemini-sentence-display" class="gemini-sentence-text placeholder-text">Appears after signs are detected.</span>
+                  <span class="tech-chip mono-val" id="gemini-sentence-status">GEMINI</span>
+                </div>
+
+                <div class="card-actions-row" style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                  <button type="button" id="btn-speak-sentence" class="btn btn-primary btn-sm">
+                    <svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                    <span>Speak</span>
+                  </button>
+                  <button type="button" id="btn-copy-sentence" class="btn btn-secondary btn-sm">Copy</button>
+                  <button type="button" id="btn-regenerate-sentence" class="btn btn-secondary btn-sm" title="Re-synthesize sentence">Refresh</button>
+                  <button type="button" id="btn-clear-sentence" class="btn btn-secondary btn-sm">Clear</button>
+                </div>
+              </div>
+
+              <!-- Card B: Local Language Translation (Auto Height) -->
+              <div class="card card-translation">
+                <div class="card-title-compact-row">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="card-section-label-blue">Translation</span>
+                    <select id="select-target-lang" class="translation-select-input" aria-label="Target Indian Language">
+                      <option value="Marathi" selected>Marathi (मराठी)</option>
+                      <option value="Hindi">Hindi (हिंदी)</option>
+                      <option value="Gujarati">Gujarati (ગુજરાતી)</option>
+                      <option value="Tamil">Tamil (தமிழ்)</option>
+                      <option value="Telugu">Telugu (తెలుగు)</option>
+                    </select>
+                  </div>
+                  <span class="tech-chip" id="translation-status">Ready</span>
+                </div>
+
+                <div id="translation-display" class="translation-output-text placeholder-text">
+                  Waiting for recognized signs to translate...
+                </div>
+
+                <div class="card-actions-row" style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                  <button type="button" id="btn-trigger-translate" class="btn btn-primary btn-sm">Translate</button>
+                  <button type="button" id="btn-speak-translation" class="btn btn-secondary btn-sm">
+                    <svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    <span>Speak</span>
+                  </button>
+                  <button type="button" id="btn-copy-translation" class="btn btn-secondary btn-sm">Copy</button>
+                </div>
+              </div>
+
+              <!-- Card C: Detected Signs Stream (Flex:1, Internal Scroll) -->
+              <div class="card card-detected-signs">
+                <div class="card-title-compact-row">
+                  <span class="card-section-label-blue">Detected Signs Stream</span>
+                  <span class="tech-chip mono-val" id="detected-signs-count">0 Tokens</span>
+                </div>
+
+                <!-- Internal Scrolling Chips Container -->
+                <div id="detected-signs-chips" class="signs-chips-container" role="list">
+                  <span class="guide-helper-text" style="align-self: center; margin: auto; color: var(--muted);">No tokens in session buffer. Perform signs to populate.</span>
+                </div>
+
+                <!-- Single-Line Monospace Strip for Raw Model Sequence -->
+                <div class="raw-sequence-strip" title="Raw Model Sequence">
+                  <span>RAW: </span>
+                  <span id="raw-model-sequence" class="raw-seq-text">(empty)</span>
+                </div>
+
+                <!-- Pinned Action Buttons -->
+                <div class="card-actions-pinned-bottom">
+                  <button type="button" id="btn-undo-sign" class="btn btn-secondary btn-sm">Undo Sign</button>
+                  <button type="button" id="btn-add-sign" class="btn btn-secondary btn-sm">Add Sign</button>
+                  <button type="button" id="btn-clear-buffer" class="btn btn-destructive btn-sm" style="margin-left: auto;">Clear Buffer</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========================================================== -->
+            <!-- COLUMN 3: CONFIDENCE TELEMETRY & GUIDE                     -->
+            <!-- ========================================================== -->
+            <div class="studio-grid-col">
+              <!-- Card D: Confidence Telemetry (Flex: 1.2) -->
+              <div class="card card-telemetry" id="card-telemetry">
+                <div class="card-title-compact-row">
+                  <span class="card-section-label-blue">Confidence Telemetry</span>
+                  <span class="tech-chip" id="telemetry-state-badge">IDLE</span>
+                </div>
+
+                <!-- Circular Gauge + Metadata -->
+                <div class="gauge-split-view">
+                  <div class="circular-gauge-wrap" id="telemetry-gauge" role="region meter" aria-label="Confidence Gauge" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    <svg viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="44" stroke="rgba(148, 163, 184, 0.2)" stroke-width="8" fill="none" />
+                      <circle id="gauge-circle-progress" cx="50" cy="50" r="44" stroke="var(--primary)" stroke-width="8" stroke-linecap="round" fill="none" stroke-dasharray="276.46" stroke-dashoffset="276.46" />
+                    </svg>
+                    <div class="gauge-center-text">
+                      <span class="gauge-pct-num" id="telemetry-confidence-pct">0%</span>
+                    </div>
+                  </div>
+
+                  <div class="gauge-meta-col">
+                    <span class="gauge-top-gesture" id="telemetry-top-gesture-name">NO HAND</span>
+                    <span class="gauge-stability-label" id="telemetry-stability-label">Stability: 0/8 frames</span>
+                    <span id="telemetry-stats-text" style="font-size: 10.5px; color: var(--muted); font-family: var(--font-mono);">Avg: 0% · Max: 0%</span>
+                  </div>
+                </div>
+
+                <!-- 30-Frame Rolling Sparkline Filling Remaining Space -->
+                <div class="sparkline-chart-area">
+                  <svg class="sparkline-svg" id="telemetry-sparkline-svg" viewBox="0 0 300 60" preserveAspectRatio="none">
+                    <!-- 70% Accept Threshold Line -->
+                    <line x1="0" y1="15.8" x2="300" y2="15.8" stroke="#16A34A" stroke-dasharray="4 4" stroke-width="1.2" opacity="0.6" />
+                    <!-- Rolling Confidence Polyline -->
+                    <polyline id="telemetry-sparkline-path" fill="none" stroke="#2563EB" stroke-width="2" points="0,55 300,55" />
+                  </svg>
+                  <div class="sparkline-legend">
+                    <span>30-Frame History</span>
+                    <span id="sparkline-stats" aria-live="polite">Target &ge; 70%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card E: Quick Recognition Guide (Flex: 1) -->
+              <div class="card card-quick-guide">
+                <div class="card-title-compact-row">
+                  <span class="card-section-label-blue">Recognition Guide</span>
+                  <span class="tech-chip">20 Vocabulary Tokens</span>
+                </div>
+
+                <p class="guide-helper-text" style="font-size: 11.5px; color: var(--muted); margin: 0;">
+                  Tap common emergency gestures to simulate tokens into buffer:
+                </p>
+
+                <!-- Scrollable Vocabulary Phrases Wrap -->
+                <div class="quick-guide-scroll-wrap" id="quick-guide-vocab">
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('I need help.')">I need help</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('I need a doctor.')">Doctor</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('I need water.')">Water</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('I am hungry.')">Food</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('I am in pain.')">Pain</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('Please wait.')">Please</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('Yes')">Yes</button>
+                  <button type="button" class="quick-phrase-pill-btn" onclick="applyQuickPhrase('No')">No</button>
+                </div>
+              </div>
+
+              <!-- Card F: Technical Debug Accordion (Collapsed) -->
+              <div class="card-debug-accordion" id="card-debug-accordion">
+                <details id="debug-accordion-details">
+                  <summary class="accordion-summary-row">
+                    <span>Technical Diagnostics</span>
+                    <span class="mono-val" style="font-size: 10px;" id="debug-socket-state">WS: ACTIVE</span>
+                  </summary>
+                  <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="font-size: 10.5px; font-family: var(--font-mono); color: var(--muted); display:flex; justify-content:space-between;">
+                      <span>SENT: <strong id="debug-packets-sent">0</strong></span>
+                      <span>RECV: <strong id="debug-packets-received">0</strong></span>
+                    </div>
+                    <pre id="debug-pipeline-events" style="font-family: var(--font-mono); font-size: 10px; max-height: 60px; overflow-y: auto; background: var(--bg-card-sub); padding: 4px; border-radius: 4px; color: var(--muted); margin: 0;"></pre>
+                    <pre id="debug-state-dump" style="display:none;"></pre>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 2: TWO-WAY CONVERSATION MODE                              -->
+        <!-- ============================================================== -->
+        <section id="view-conversation" class="view-section">
+          <div class="standalone-view-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+              <h2 class="serif-heading" style="font-size: 22px;">Two-Way Assistive Conversation</h2>
+              <div style="display:flex; gap:8px;">
+                <button type="button" id="btn-toggle-captions-overlay" class="btn btn-secondary btn-sm">
+                  Captions Overlay: <span id="captions-status-label">OFF</span>
+                </button>
+                <button type="button" id="btn-clear-conversation" class="btn btn-destructive btn-sm">Clear Thread</button>
+              </div>
+            </div>
+            <div class="two-way-chat-grid">
+              <div class="chat-thread-box">
+                <span class="card-section-label-blue">Deaf / Signer Utterances</span>
+                <div id="signer-dialogue-thread" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+              </div>
+              <div class="chat-thread-box">
+                <span class="card-section-label-blue">Hearing Responder Speech</span>
+                <div id="speaker-dialogue-thread" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:6px;"></div>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                  <button type="button" id="btn-mic-listen" class="btn btn-primary btn-sm">Listen Mic</button>
+                  <input type="text" id="speaker-manual-input" placeholder="Type response..." style="flex:1; padding:6px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+                  <button type="button" id="btn-speaker-send" class="btn btn-secondary btn-sm">Send</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 3: TRANSLATION WORKBENCH                                   -->
+        <!-- ============================================================== -->
+        <section id="view-translate" class="view-section">
+          <div class="standalone-view-container">
+            <h2 class="serif-heading" style="font-size: 22px; margin-bottom: 12px;">Multilingual Translation Workbench</h2>
+            <div style="display:flex; gap:8px; margin-bottom: 16px;">
+              <input type="text" id="workbench-input" placeholder="Enter sentence or sign gloss sequence..." style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading); font-size:14px;">
+              <button type="button" id="btn-workbench-translate" class="btn btn-primary">Translate All Languages</button>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px;">
+              <div class="card" style="padding:14px;">
+                <span class="card-section-label-blue">Marathi (मराठी)</span>
+                <div id="wb-marathi-output" class="translation-output-text" style="margin-top:6px;">(empty)</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="card-section-label-blue">Hindi (हिंदी)</span>
+                <div id="wb-hindi-output" class="translation-output-text" style="margin-top:6px;">(empty)</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="card-section-label-blue">Gujarati (ગુજરાતી)</span>
+                <div id="wb-gujarati-output" class="translation-output-text" style="margin-top:6px;">(empty)</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="card-section-label-blue">Tamil (தமிழ்)</span>
+                <div id="wb-tamil-output" class="translation-output-text" style="margin-top:6px;">(empty)</div>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="card-section-label-blue">Telugu (తెలుగు)</span>
+                <div id="wb-telugu-output" class="translation-output-text" style="margin-top:6px;">(empty)</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 4: SESSION HISTORY LOG                                    -->
+        <!-- ============================================================== -->
+        <section id="view-history" class="view-section">
+          <div class="standalone-view-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+              <h2 class="serif-heading" style="font-size: 22px;">Session History Log</h2>
+              <div style="display:flex; gap:8px;">
+                <button type="button" id="btn-export-history-csv" class="btn btn-secondary btn-sm">Export CSV</button>
+                <button type="button" id="btn-clear-history" class="btn btn-destructive btn-sm">Clear History</button>
+              </div>
+            </div>
+            <div class="card" style="padding:0; overflow:hidden;">
+              <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+                <thead style="background:var(--bg-card-sub); border-bottom:1px solid var(--card-border);">
+                  <tr>
+                    <th style="padding:10px 14px;">Time</th>
+                    <th style="padding:10px 14px;">Signs Buffer</th>
+                    <th style="padding:10px 14px;">English Sentence</th>
+                    <th style="padding:10px 14px;">Translation</th>
+                    <th style="padding:10px 14px;">Latency</th>
+                  </tr>
+                </thead>
+                <tbody id="history-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 5: PHRASES & WORD PACKS                                   -->
+        <!-- ============================================================== -->
+        <section id="view-phrases" class="view-section">
+          <div class="standalone-view-container">
+            <h2 class="serif-heading" style="font-size: 22px; margin-bottom: 12px;">Phrase Book & Custom Word Packs</h2>
+            <div id="phrases-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:12px; margin-bottom:20px;"></div>
+
+            <div class="card" style="padding:16px;">
+              <span class="card-section-label-blue" style="margin-bottom:8px;">Add Custom Word Pack Expression</span>
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-bottom:10px;">
+                <input type="text" id="wp-input-signs" placeholder="Signs (e.g. HELP, PAIN)" style="padding:6px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+                <input type="text" id="wp-input-sentence" placeholder="English Sentence" style="padding:6px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+                <input type="text" id="wp-input-marathi" placeholder="Marathi Translation" style="padding:6px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+                <input type="text" id="wp-input-hindi" placeholder="Hindi Translation" style="padding:6px 10px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+              </div>
+              <button type="button" id="btn-add-wordpack" class="btn btn-primary btn-sm">Save Custom Pack</button>
+              <table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:12.5px;">
+                <tbody id="wordpacks-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 6: LEARN MODE                                             -->
+        <!-- ============================================================== -->
+        <section id="view-learn" class="view-section">
+          <div class="standalone-view-container">
+            <h2 class="serif-heading" style="font-size: 22px; margin-bottom: 12px;">Sign Recognition Learn Mode</h2>
+            <div id="learn-cards-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:12px;"></div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 7: ANALYTICS & TELEMETRY                                  -->
+        <!-- ============================================================== -->
+        <section id="view-analytics" class="view-section">
+          <div class="standalone-view-container">
+            <h2 class="serif-heading" style="font-size: 22px; margin-bottom: 12px;">Studio Analytics & Runtime Telemetry</h2>
+            <div class="analytics-stats-grid">
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Accepted Signs</span>
+                <span class="hero-stat-val" id="stat-total-signs">0</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Duplicate Suppressions</span>
+                <span class="hero-stat-val" id="stat-dup-suppressions">0</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Total Sentences</span>
+                <span class="hero-stat-val" id="stat-total-sentences">0</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Sentence Cache Hits</span>
+                <span class="hero-stat-val" id="stat-sentence-cache-hits">0</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Gemini API Calls</span>
+                <span class="hero-stat-val" id="stat-gemini-calls">0</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Translation Cache Hits</span>
+                <span class="hero-stat-val" id="stat-trans-cache-hits">0</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Average Latency</span>
+                <span class="hero-stat-val" id="stat-avg-latency">0 ms</span>
+              </div>
+              <div class="card" style="padding:14px;">
+                <span class="hero-stat-lbl">Camera Frame Rate</span>
+                <span class="hero-stat-val" id="stat-camera-fps">0.0 FPS</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 8: PROFILES & SETTINGS                                    -->
+        <!-- ============================================================== -->
+        <section id="view-settings" class="view-section">
+          <div class="standalone-view-container">
+            <h2 class="serif-heading" style="font-size: 22px; margin-bottom: 12px;">Profiles & Calibration Settings</h2>
+            <div class="settings-card-group">
+              <div class="card" style="padding:16px;">
+                <span class="card-section-label-blue" style="margin-bottom:8px;">Signer Profile</span>
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <select id="select-active-profile" class="translation-select-input" style="flex:1;">
+                    <option value="standard">Standard Signer (Default)</option>
+                    <option value="expert">Expert Signer (Fast)</option>
+                    <option value="tremor">Tremor / Motor Assisted</option>
+                    <option value="left_dominant">Left Hand Dominant</option>
+                  </select>
+                  <button type="button" id="btn-save-profile" class="btn btn-primary btn-sm">Save Profile</button>
+                </div>
+              </div>
+
+              <div class="card" style="padding:16px;">
+                <span class="card-section-label-blue" style="margin-bottom:8px;">Inference Gating Parameters</span>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+                  <div>
+                    <label style="font-size:12px; font-weight:600; color:var(--text);">Hold Threshold (Frames)</label>
+                    <input type="number" id="setting-hold-threshold" value="8" style="width:100%; padding:6px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+                  </div>
+                  <div>
+                    <label style="font-size:12px; font-weight:600; color:var(--text);">Min Confidence (0.50 - 0.95)</label>
+                    <input type="number" id="setting-min-confidence" step="0.05" value="0.70" style="width:100%; padding:6px; border-radius:6px; border:1px solid var(--card-border); background:var(--bg-input); color:var(--heading);">
+                  </div>
+                  <div>
+                    <label style="font-size:12px; font-weight:600; color:var(--text);">Hand Preference</label>
+                    <select id="setting-hand-preference" class="translation-select-input" style="width:100%; height:32px;">
+                      <option value="both">Both Hands</option>
+                      <option value="right">Right Only</option>
+                      <option value="left">Left Only</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="padding:16px;">
+                <span class="card-section-label-blue" style="margin-bottom:8px;">Hands-Free Voice Commands</span>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div>
+                    <div style="font-weight:600; color:var(--heading);">Enable Voice Shortcuts</div>
+                    <div id="voice-command-listener-status" style="font-size:12px; color:var(--muted);">Status: Disabled (Default OFF)</div>
+                  </div>
+                  <input type="checkbox" id="toggle-voice-shortcuts" style="width:18px; height:18px; accent-color:var(--primary);">
+                </div>
+              </div>
+
+              <div class="card" style="padding:16px;">
+                <span class="card-section-label-blue" style="margin-bottom:8px;">Theme Mode</span>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <div>
+                    <div style="font-weight:600; color:var(--heading);">Dark / Light Theme Selection</div>
+                    <div style="font-size:12px; color:var(--muted);">Switch between editorial light and high-focus dark modes.</div>
+                  </div>
+                  <button type="button" id="btn-toggle-high-contrast" class="btn btn-secondary btn-sm">Toggle Theme</button>
+                </div>
+              </div>
+
+              <!-- System Diagnostics & Health Panel -->
+              <div class="card" style="padding:16px;">
+                <span class="card-section-label-blue" style="margin-bottom:8px;">System Health Status</span>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:12.5px;">
+                  <div>Backend: <strong id="health-backend-status">Online</strong></div>
+                  <div>Camera: <strong id="health-camera-status">Idle</strong></div>
+                  <div>Gemini SLM: <strong id="health-gemini-status">Ready</strong></div>
+                  <div>Active Model: <strong id="health-model-name">LSTM + Gemini</strong></div>
+                </div>
+                <div style="margin-top:8px; font-size:12px; color:var(--muted);">
+                  <strong>Tip: </strong><span id="health-troubleshoot-tip">System operational.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- LIVE CAPTIONS OVERLAY (Conversation Broadcast)                       -->
+  <!-- ==================================================================== -->
+  <div id="live-captions-overlay" class="live-captions-overlay" role="region" aria-live="polite" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(11,27,58,0.92); color:#FFFFFF; border:1px solid #38BDF8; padding:12px 24px; border-radius:12px; z-index:250; max-width:800px; text-align:center; box-shadow:var(--shadow-card);">
+    <div class="caption-label" style="font-size:10px; font-weight:700; letter-spacing:0.12em; color:#60A5FA; text-transform:uppercase;">LIVE ASSISTIVE CAPTIONS</div>
+    <div id="live-captions-body" class="caption-body" style="font-size:16px; font-weight:600; margin-top:4px;">Ready for sign or speech input...</div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL: ADD MANUAL SIGN TOKEN                                         -->
+  <!-- ==================================================================== -->
+  <div id="modal-add-sign" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header-row">
+        <h3 class="serif-heading" style="font-size: 20px;">Insert Sign Token</h3>
+        <button type="button" id="btn-close-modal" class="btn btn-secondary btn-sm" aria-label="Close Modal">✕</button>
+      </div>
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 16px;">
+        Select a gesture token to insert into the active session buffer:
+      </p>
+      <div class="vocab-grid-modal" id="modal-vocab-grid">
+        <!-- 20 gestures populated dynamically in JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL: HOW IT WORKS (Landing Page Link)                              -->
+  <!-- ==================================================================== -->
+  <div id="modal-how-it-works" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header-row">
+        <h3 class="serif-heading" style="font-size: 20px;">How It Works</h3>
+        <button type="button" class="btn btn-secondary btn-sm btn-close-generic-modal" aria-label="Close">✕</button>
+      </div>
+      <div style="font-size: 13.5px; color: var(--text); line-height: 1.6; display: flex; flex-direction: column; gap: 10px;">
+        <p><strong>1. Optical Tracking:</strong> Real-time MediaPipe extraction mapping 21 spatial hand landmarks.</p>
+        <p><strong>2. Temporal Classification:</strong> Hybrid RF-LSTM model over a 30-frame FIFO buffer with confidence gating (&ge; 70%).</p>
+        <p><strong>3. Sentence Synthesis:</strong> Gesture sequences reconstructed into fluent sentences using local SLM intelligence.</p>
+        <p><strong>4. Regional Translation:</strong> Direct translation to Marathi, Hindi, Gujarati, Tamil, and Telugu with local speech synthesis.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL: PIPELINE (Landing Page Link)                                  -->
+  <!-- ==================================================================== -->
+  <div id="modal-pipeline" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header-row">
+        <h3 class="serif-heading" style="font-size: 20px;">System Pipeline</h3>
+        <button type="button" class="btn btn-secondary btn-sm btn-close-generic-modal" aria-label="Close">✕</button>
+      </div>
+      <div style="font-size: 13px; color: var(--text); line-height: 1.6; display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: var(--bg-card-sub); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border);">
+          <strong>Webcam Capture (30 FPS)</strong>
+          <div style="color: var(--muted); font-family: var(--font-mono); font-size: 11px;">HTML5 getUserMedia &bull; Mirror Transform &bull; Zero Frame Loss</div>
+        </div>
+        <div style="background: var(--bg-card-sub); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border);">
+          <strong>Landmark Feature Extraction</strong>
+          <div style="color: var(--muted); font-family: var(--font-mono); font-size: 11px;">21 Landmarked Coordinates &bull; 126 Feature Vector per Frame</div>
+        </div>
+        <div style="background: var(--bg-card-sub); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border);">
+          <strong>State Machine & Gating</strong>
+          <div style="color: var(--muted); font-family: var(--font-mono); font-size: 11px;">IDLE &rarr; DETECTING &rarr; STABLE &rarr; ACCEPTED &rarr; COOLDOWN</div>
+        </div>
+        <div style="background: var(--bg-card-sub); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--card-border);">
+          <strong>Multilingual Synthesis</strong>
+          <div style="color: var(--muted); font-family: var(--font-mono); font-size: 11px;">Devanagari Local Dictionary &bull; Gemini 3.5 SLM &bull; Web Speech TTS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- MODAL: RESEARCH PAPER (Landing Page Link)                             -->
+  <!-- ==================================================================== -->
+  <div id="modal-paper" class="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header-row">
+        <h3 class="serif-heading" style="font-size: 20px;">Research Architecture</h3>
+        <button type="button" class="btn btn-secondary btn-sm btn-close-generic-modal" aria-label="Close">✕</button>
+      </div>
+      <div style="font-size: 13.5px; color: var(--text); line-height: 1.6; display: flex; flex-direction: column; gap: 10px;">
+        <p><strong>Paper:</strong> Real-Time Indian Sign Language to Multilingual Regional Speech Bridge using Optical Landmarks and SLMs.</p>
+        <p><strong>Abstract:</strong> A zero-hardware, browser-first translation bridge achieving high temporal stability across 20 emergency gestures with sub-50ms synthesis latency.</p>
+        <div style="margin-top: 8px;">
+          <a href="#studio" class="btn btn-primary btn-sm btn-close-generic-modal" id="btn-paper-open-studio">Open Live Studio Demo</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="app.js?v=8.0"></script>
+  <script src="landing.js?v=8.0"></script>
+</body>
+</html>

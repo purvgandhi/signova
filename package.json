@@ -1,0 +1,21 @@
+{
+  "name": "signova-claude-export",
+  "version": "2.0.0",
+  "description": "Signova / SignBridge Studio — Assistive Sign-to-Local Language Intelligence",
+  "scripts": {
+    "start": "python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000",
+    "dev": "python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --reload",
+    "test": "python tests/run_all_tests.py",
+    "test:e2e": "python tests/test_master_prompt_e2e.py"
+  },
+  "keywords": [
+    "sign-language",
+    "slm",
+    "mediapipe",
+    "lstm",
+    "fastapi",
+    "assistive-tech"
+  ],
+  "author": "SignBridge Research Team",
+  "license": "MIT"
+}

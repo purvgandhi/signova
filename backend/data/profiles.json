@@ -1,0 +1,42 @@
+[
+  {
+    "id": "standard",
+    "name": "Standard Signer (Default)",
+    "hold_threshold_frames": 8,
+    "min_confidence": 0.7,
+    "hand_preference": "both",
+    "handedness_swap": true,
+    "auto_speak_sentence": false,
+    "voice_shortcuts_enabled": false
+  },
+  {
+    "id": "expert",
+    "name": "Expert / Fast Signer",
+    "hold_threshold_frames": 4,
+    "min_confidence": 0.65,
+    "hand_preference": "both",
+    "handedness_swap": true,
+    "auto_speak_sentence": false,
+    "voice_shortcuts_enabled": false
+  },
+  {
+    "id": "tremor",
+    "name": "Tremor & Stability Assist",
+    "hold_threshold_frames": 14,
+    "min_confidence": 0.78,
+    "hand_preference": "both",
+    "handedness_swap": true,
+    "auto_speak_sentence": true,
+    "voice_shortcuts_enabled": false
+  },
+  {
+    "id": "left_dominant",
+    "name": "Left-Handed Dominant",
+    "hold_threshold_frames": 8,
+    "min_confidence": 0.7,
+    "hand_preference": "left",
+    "handedness_swap": false,
+    "auto_speak_sentence": false,
+    "voice_shortcuts_enabled": false
+  }
+]

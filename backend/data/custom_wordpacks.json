@@ -1,0 +1,26 @@
+[
+  {
+    "signs_key": "pain doctor help",
+    "sentence": "I am in severe pain and need a doctor immediately.",
+    "marathi": "मला तीव्र वेदना होत आहेत आणि ताबडतोब डॉक्टरांची गरज आहे.",
+    "hindi": "मुझे बहुत तेज दर्द हो रहा है और तुरंत डॉक्टर की जरूरत है।"
+  },
+  {
+    "signs_key": "water please more",
+    "sentence": "Could you please give me some more drinking water?",
+    "marathi": "कृपया मला आणखी पिण्याचे पाणी द्याल का?",
+    "hindi": "क्या आप मुझे थोड़ा और पीने का पानी दे सकते हैं?"
+  },
+  {
+    "signs_key": "school please help",
+    "sentence": "Please help me with my school studies.",
+    "marathi": "कृपया मला माझ्या शाळेच्या अभ्यासात मदत करा.",
+    "hindi": "कृपया मेरी स्कूल की पढ़ाई में मदद करें।"
+  },
+  {
+    "signs_key": "hello name happy",
+    "sentence": "Hello, my name is a pleasure to share and I am very happy to meet you.",
+    "marathi": "नमस्कार, माझे नाव सांगताना आनंद होत आहे आणि मला भेटून खूप आनंद झाला.",
+    "hindi": "नमस्ते, अपना नाम बताते हुए खुशी हो रही है और आपसे मिलकर बहुत खुशी हुई।"
+  }
+]
