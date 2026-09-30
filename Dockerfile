@@ -21,6 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files (.dockerignore keeps .env and local backups out of the image)
 COPY . .
 
+# Hosts such as Hugging Face Spaces run the container as a non-root user (uid 1000):
+# give it a writable HOME and let it save word packs / profiles in backend/data
+ENV HOME=/tmp
+RUN chmod -R a+rwX /app/backend/data
+
 # Expose FastAPI port
 EXPOSE 8000
 
