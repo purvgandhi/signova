@@ -110,8 +110,8 @@ User signs:
 Stored in `.env` (git-ignored, never exposed to frontend):
 
 ```env
-GEMINI_API_KEY=AQ.Ab8RN6IUGeU7cr3aXCoRfbVxiYetmGybHRVSwKSuqMJPdUBBsA
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_API_KEY=YOUR_API_KEY_HERE
+GEMINI_MODEL=gemini-2.5-flash-lite
 ```
 
 ---
