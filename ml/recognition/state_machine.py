@@ -1,8 +1,17 @@
+"""
+Robust Gesture State Machine & Consensus Filter for Signova
+- Temporal stability window & consensus voting
+- Unknown / Idle / Detecting / Stable / Accepted / Cooldown states
+- Ambiguity and entropy filtering (suppresses noisy transitional states)
+- Duplicate suppression when a user holds the same sign continuously
+- Rapid boundary reset on hand release / gesture transitions
+"""
 from __future__ import annotations
 
 import time
 from enum import Enum
-from typing import Optional, Tuple, Dict, Any
+from collections import deque, Counter
+from typing import Optional, Tuple, Dict, Any, List
 
 class RecognitionState(str, Enum):
     IDLE = "IDLE"
@@ -18,23 +27,26 @@ class RecognitionEvent(str, Enum):
 
 class RecognitionStateMachine:
     """
-    Robust gesture acceptance and deduplication state machine for SignBridge.
-    Enforces temporal stability, confidence thresholds, cooldown, boundary detection,
-    and duplicate suppression (preventing holding a gesture from flooding the buffer).
+    State machine that manages gesture acceptance, temporal voting,
+    transition boundaries, and duplicate suppression.
     """
     def __init__(
         self,
-        target_stable_frames: int = 8,
-        accept_threshold: float = 0.70,
-        reject_threshold: float = 0.50,
-        cooldown_frames: int = 8,
-        repeat_gesture_window_ms: int = 1200
+        target_stable_frames: int = 7,
+        accept_threshold: float = 0.65,
+        reject_threshold: float = 0.45,
+        cooldown_frames: int = 6,
+        repeat_gesture_window_ms: int = 1200,
+        consensus_window_size: int = 7
     ):
         self.target_stable_frames = target_stable_frames
         self.accept_threshold = accept_threshold
         self.reject_threshold = reject_threshold
         self.cooldown_frames = cooldown_frames
         self.repeat_gesture_window_sec = repeat_gesture_window_ms / 1000.0
+
+        self.consensus_window = deque(maxlen=consensus_window_size)
+        self.confidence_window = deque(maxlen=consensus_window_size)
 
         self.state = RecognitionState.IDLE
         self.stable_frames = 0
@@ -54,7 +66,7 @@ class RecognitionStateMachine:
         confidence: float
     ) -> Tuple[RecognitionState, int, int, RecognitionEvent, Optional[str]]:
         """
-        Transitions the state machine given hand presence, top gesture prediction, and confidence.
+        Updates state with sliding window consensus and boundary detection.
         Returns:
             (state, stable_frames, target_stable_frames, event, accepted_sign)
         """
@@ -73,16 +85,26 @@ class RecognitionStateMachine:
                 self.state = RecognitionState.IDLE
 
         if not has_hand:
-            # Hand removed/neutral boundary detected
+            # Hand dropped / neutral boundary
             self.state = RecognitionState.IDLE
             self.stable_frames = 0
             self.current_candidate = None
             self.hand_released = True
+            self.consensus_window.clear()
+            self.confidence_window.clear()
             return self.state, 0, self.target_stable_frames, event, None
 
-        # Hand is present
-        if confidence < self.reject_threshold:
-            # Below reject threshold -> UNCERTAIN / DETECTING
+        # Hand is present -> add to rolling consensus buffer
+        self.consensus_window.append(top_gesture)
+        self.confidence_window.append(confidence)
+
+        # Calculate consensus in sliding window
+        counts = Counter(self.consensus_window)
+        dominant_gesture, count = counts.most_common(1)[0]
+        avg_confidence = float(np_mean(list(self.confidence_window)))
+
+        # Reject low confidence / uncertain gestures
+        if avg_confidence < self.reject_threshold or dominant_gesture in ("none", "unknown"):
             self.state = RecognitionState.DETECTING
             self.stable_frames = 0
             self.current_candidate = None
@@ -90,40 +112,44 @@ class RecognitionStateMachine:
             event = RecognitionEvent.SIGN_UNCERTAIN
             return self.state, 0, self.target_stable_frames, event, None
 
-        # Check duplicate suppression if user is still continuously holding the exact same sign
-        is_same_as_last = (top_gesture == self.last_accepted)
+        # Duplicate suppression check
+        is_same_as_last = (dominant_gesture == self.last_accepted)
         in_repeat_window = (now - self.last_accepted_time) < self.repeat_gesture_window_sec
 
         if is_same_as_last and not self.hand_released and in_repeat_window:
-            # User is holding the sign without a neutral boundary or pause -> suppress duplicate
             self.duplicate_suppressions += 1
             self.state = RecognitionState.IDLE
             return self.state, 0, self.target_stable_frames, RecognitionEvent.NONE, None
 
-        # Hand is active with candidate gesture
-        if top_gesture == self.current_candidate:
+        # Temporal stability tracking
+        if dominant_gesture == self.current_candidate:
             self.stable_frames += 1
-            if self.stable_frames >= self.target_stable_frames and confidence >= self.accept_threshold:
-                # Gesture is accepted!
+            # Check acceptance condition: enough stable frames & sufficient consensus ratio & confidence
+            consensus_ratio = count / len(self.consensus_window)
+            if (self.stable_frames >= self.target_stable_frames and
+                consensus_ratio >= 0.70 and
+                avg_confidence >= self.accept_threshold):
+
                 self.state = RecognitionState.ACCEPTED
                 event = RecognitionEvent.SIGN_ACCEPTED
-                accepted_sign = top_gesture
-                self.last_accepted = top_gesture
+                accepted_sign = dominant_gesture
+                self.last_accepted = dominant_gesture
                 self.last_accepted_time = now
                 self.hand_released = False
                 self.total_accepted += 1
                 self.stable_frames = 0
                 self.current_candidate = None
+                self.consensus_window.clear()
+                self.confidence_window.clear()
                 self.cooldown_remaining = self.cooldown_frames
             else:
                 self.state = RecognitionState.STABLE
         else:
-            # Sign changed or starting gesture
-            self.current_candidate = top_gesture
+            # Gesture changed
+            self.current_candidate = dominant_gesture
             self.stable_frames = 1
             self.state = RecognitionState.DETECTING
-            if top_gesture != self.last_accepted:
-                # Different sign -> boundary crossed
+            if dominant_gesture != self.last_accepted:
                 self.hand_released = True
 
         return self.state, self.stable_frames, self.target_stable_frames, event, accepted_sign
@@ -137,6 +163,8 @@ class RecognitionStateMachine:
         self.last_accepted = None
         self.last_accepted_time = 0.0
         self.hand_released = True
+        self.consensus_window.clear()
+        self.confidence_window.clear()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -149,3 +177,6 @@ class RecognitionStateMachine:
             "total_accepted": self.total_accepted,
             "duplicate_suppressions": self.duplicate_suppressions
         }
+
+def np_mean(vals: List[float]) -> float:
+    return sum(vals) / len(vals) if vals else 0.0

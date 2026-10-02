@@ -25,27 +25,12 @@
       });
     }
   </script>
-  <script>
-    // Decide before first paint: every fresh load of the home page opens with the intro video,
-    // so the home page is covered from the very first frame. Direct /studio links and
-    // reduced-motion visitors go straight in.
-    (function () {
-      try {
-        var h = (location.hash || '').toLowerCase();
-        var p = (location.pathname || '').toLowerCase();
-        var forced = /[?&]intro=1/.test(location.search);
-        var landing = p.indexOf('studio') === -1 && (!h || h === '#landing');
-        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (forced || (landing && !reduced)) document.documentElement.classList.add('play-intro');
-      } catch (e) {}
-    })();
-  </script>
-  <link rel="stylesheet" href="style.css?v=8.0">
-  <link rel="stylesheet" href="landing.css?v=8.0">
+  <link rel="stylesheet" href="style.css?v=9.0">
+  <link rel="stylesheet" href="landing.css?v=9.0">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
 </head>
-<body data-theme="dark">
+<body data-theme="dark" class="hero-revealed">
 
   <!-- ==================================================================== -->
   <!-- LOW-POLY BACKGROUND TEXTURE & OVERLAYS                               -->
@@ -65,31 +50,6 @@
   <!-- Hidden compatibility spans for header title / icon references -->
   <span id="current-page-title" style="display:none;">Live Studio</span>
   <span id="current-view-icon" style="display:none;">🖐</span>
-
-  <!-- ==================================================================== -->
-  <!-- OPENING: full-screen two-hand video, then crush + glass burst        -->
-  <!-- ==================================================================== -->
-  <div id="intro-cinematic" class="intro-cinematic" hidden>
-    <video id="intro-video" class="intro-video" muted playsinline preload="none" disablepictureinpicture
-           poster="assets/videos/intro-poster.jpg" aria-hidden="true" tabindex="-1"></video>
-    <canvas id="intro-canvas" aria-hidden="true"></canvas>
-    <button type="button" id="btn-skip-intro" class="intro-skip-btn" aria-label="Skip intro">
-      <span>Skip intro</span>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-    </button>
-  </div>
-  <script>
-    // Start the opening video as early as possible (only when the intro will actually play)
-    (function () {
-      var v = document.getElementById('intro-video');
-      var saveData = navigator.connection && navigator.connection.saveData;
-      if (!v || saveData || !document.documentElement.classList.contains('play-intro')) return;
-      v.src = 'assets/videos/intro.mp4';
-      v.muted = true;
-      var p = v.play();
-      if (p && p.catch) p.catch(function () { v.dataset.blocked = '1'; });
-    })();
-  </script>
 
   <!-- Cursor-following glow (landing only, pointer devices only) -->
   <div id="cursor-glow" class="cursor-glow" aria-hidden="true"></div>
@@ -132,6 +92,13 @@
         </button>
       </div>
     </header>
+
+    <!-- Scroll progress: current chapter 01/06 and overall progress -->
+    <div class="scroll-progress" id="scroll-progress" aria-hidden="true">
+      <span class="sp-num" id="sp-num">01</span>
+      <span class="sp-track"><span class="sp-fill" id="sp-fill"></span></span>
+      <span class="sp-total">06</span>
+    </div>
 
     <main class="landing-story">
 
@@ -201,38 +168,50 @@
           <article class="feature-card glass-panel reveal tilt" style="--d:0">
             <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="5" r="2"/><circle cx="6" cy="10" r="2"/><circle cx="18" cy="10" r="2"/><circle cx="12" cy="19" r="2"/><path d="M12 7v10M7.5 11.5 11 17.5M16.5 11.5 13 17.5"/></svg></span>
             <div><h3>21-point landmarks</h3><p>MediaPipe tracks 21 3D points per hand in the browser. No gloves or depth sensors.</p></div>
+            <span class="feature-viz fv-landmarks" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M24 42 16 34 12 26 9 18M24 42 19 24 18 14 17 6M24 42 25 22 26 11 27 4M24 42 30 24 33 15 35 8M24 42 34 30 38 24 41 18" /><circle cx="9" cy="18" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="27" cy="4" r="2"/><circle cx="35" cy="8" r="2"/><circle cx="41" cy="18" r="2"/><circle cx="24" cy="42" r="2.4"/></svg></span>
           </article>
           <article class="feature-card glass-panel reveal tilt" style="--d:1">
             <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></span>
             <div><h3>RF + LSTM recognition</h3><p>A Keras LSTM reads 30-frame windows across 20 signs, gated at ≥ 70% confidence.</p></div>
+            <span class="feature-viz fv-lstm" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
           </article>
           <article class="feature-card glass-panel reveal tilt" style="--d:2">
             <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
             <div><h3>Sentence AI</h3><p>Accepted signs become natural English from local templates, with an optional Gemini fallback.</p></div>
+            <span class="feature-viz fv-sentence" aria-hidden="true"><i></i><i></i><i></i><b></b></span>
           </article>
           <article class="feature-card glass-panel reveal tilt" style="--d:3">
             <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
             <div><h3>5 regional languages</h3><p>Marathi · Hindi · Gujarati · Tamil · Telugu, translated offline and spoken aloud.</p></div>
+            <span class="feature-viz fv-langs" aria-hidden="true"><span>अ</span><span>ગ</span><span>த</span><span>తె</span><span>म</span></span>
           </article>
           <article class="feature-card glass-panel reveal tilt" style="--d:4">
             <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
             <div><h3>Real-time streaming</h3><p>126-float landmark packets over a WebSocket, with a state machine that stops duplicate signs.</p></div>
+            <span class="feature-viz fv-stream" aria-hidden="true"><em></em><i></i><i></i><i></i></span>
           </article>
           <article class="feature-card glass-panel reveal tilt" style="--d:5">
             <span class="feature-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
             <div><h3>Built for emergencies</h3><p>Help, doctor, pain, water: the signs that matter most, understood in seconds.</p></div>
+            <span class="feature-viz fv-pulse" aria-hidden="true"><i></i><i></i><b></b></span>
           </article>
         </div>
       </section>
 
       <!-- ======================= PIPELINE (one row) ======================= -->
-      <section class="story-section compact" id="sec-pipeline" aria-labelledby="pipeline-title">
+      <section class="story-section compact pipeline-journey" id="sec-pipeline" aria-labelledby="pipeline-title">
         <div class="section-head reveal">
           <span class="section-kicker">AI Pipeline</span>
           <h2 class="section-title" id="pipeline-title">Hand → Landmarks → RF + LSTM → Sentence → Language</h2>
+          <p class="section-lead">Scroll to follow a sign through the real pipeline, or select a stage.</p>
         </div>
-        <div class="pipeline-track reveal" id="pipeline-track" role="tablist" aria-label="AI pipeline stages">
-          <span class="pipeline-particle" id="pipeline-particle" aria-hidden="true"></span>
+        <div class="pipe3d reveal" id="pipe3d">
+          <div class="pipe3d-plane" id="pipe3d-plane">
+            <svg class="pipe3d-path" id="pipe3d-path" aria-hidden="true"></svg>
+            <div class="pipeline-track" id="pipeline-track" role="tablist" aria-label="AI pipeline stages">
+              <span class="pipeline-particle" id="pipeline-particle" aria-hidden="true"></span>
+            </div>
+          </div>
         </div>
         <div class="pipeline-detail glass-panel reveal" id="pipeline-detail" role="tabpanel" aria-live="polite">
           <div class="pipeline-detail-head">
@@ -319,16 +298,18 @@
       <!-- ===================== RESEARCH + DEMO (side by side) ===================== -->
       <section class="story-section compact" id="sec-research" aria-labelledby="research-title">
         <div class="research-demo-grid single">
-          <article class="research-card glass-panel reveal">
+          <article class="research-card glass-panel reveal" id="research-card">
             <span class="section-kicker">Research · Technology</span>
             <h2 class="section-title small" id="research-title">Real-Time Indian Sign Language to Multilingual Regional Speech</h2>
-            <ul class="research-list">
-              <li><b>Vision</b> <span>MediaPipe Hands (WASM), server fallback</span></li>
-              <li><b>Model</b> <span>RF baseline + Keras LSTM, tensor (1, 30, 126)</span></li>
-              <li><b>Gating</b> <span>IDLE → DETECTING → STABLE → ACCEPTED → COOLDOWN</span></li>
-              <li><b>Language</b> <span>local templates + word packs, optional Gemini</span></li>
-              <li><b>Transport</b> <span>FastAPI, <code>/ws/recognition</code>, <code>/api/sentence</code></span></li>
-            </ul>
+            <ol class="arch-stack" id="arch-stack" aria-label="Signova architecture, from camera to speech">
+              <li class="arch-layer" style="--i:0"><span class="arch-idx mono-val">01</span><b>MediaPipe</b><span class="arch-desc">Hand tracking in the browser (WASM)</span></li>
+              <li class="arch-layer" style="--i:1"><span class="arch-idx mono-val">02</span><b>21 Landmarks</b><span class="arch-desc">x, y, z per point · 126 floats per frame</span></li>
+              <li class="arch-layer" style="--i:2"><span class="arch-idx mono-val">03</span><b>RF + LSTM</b><span class="arch-desc">30-frame window · tensor (1, 30, 126) · 20 signs</span></li>
+              <li class="arch-layer" style="--i:3"><span class="arch-idx mono-val">04</span><b>State Machine</b><span class="arch-desc">DETECTING → STABLE → ACCEPTED → COOLDOWN</span></li>
+              <li class="arch-layer" style="--i:4"><span class="arch-idx mono-val">05</span><b>Sentence</b><span class="arch-desc">local templates + word packs · Gemini</span></li>
+              <li class="arch-layer" style="--i:5"><span class="arch-idx mono-val">06</span><b>Translation</b><span class="arch-desc">Marathi · Hindi · Gujarati · Tamil · Telugu</span></li>
+              <li class="arch-layer" style="--i:6"><span class="arch-idx mono-val">07</span><b>TTS</b><span class="arch-desc">Web Speech output in the browser</span></li>
+            </ol>
             <button type="button" id="btn-paper" class="btn btn-secondary magnetic">Read the abstract</button>
           </article>
 
@@ -336,13 +317,15 @@
       </section>
 
       <!-- ========================= FINAL CTA ========================= -->
-      <section class="story-section compact final-cta-section" id="sec-cta" aria-labelledby="cta-title">
-        <div class="final-cta glass-panel reveal">
-          <div>
-            <h2 class="section-title small" id="cta-title">Break the barrier in real time.</h2>
-            <p class="section-lead">Gesture → AI → Understanding → Language.</p>
+      <section class="story-section final-cta-section finale" id="sec-cta" aria-labelledby="cta-title">
+        <canvas class="finale-canvas" id="finale-canvas" aria-hidden="true"></canvas>
+        <div class="finale-content reveal">
+          <span class="section-kicker">Signova</span>
+          <h2 class="section-title" id="cta-title">Break the barrier in real time.</h2>
+          <p class="section-lead">Gesture → AI → Understanding → Language.</p>
+          <div class="hero-cta-group center">
+            <button type="button" class="btn btn-primary magnetic btn-glow" id="btn-launch-studio-final">→ Launch Live Studio</button>
           </div>
-          <button type="button" class="btn btn-primary magnetic btn-glow" id="btn-launch-studio-final">→ Launch Live Studio</button>
         </div>
       </section>
 
@@ -591,7 +574,7 @@
             <!-- COLUMN 2: SENTENCE + TRANSLATION + DETECTED SIGNS           -->
             <!-- ========================================================== -->
             <div class="studio-grid-col">
-              <!-- Card A: AI Reconstructed Sentence (Auto Height) -->
+              <!-- Card A: AI Reconstructed Sentence (Large Primary Panel) -->
               <div class="card card-ai-sentence">
                 <div class="card-title-compact-row">
                   <span class="card-section-label-blue">AI Reconstructed Sentence</span>
@@ -605,11 +588,15 @@
                   Waiting for sign gesture sequence...
                 </div>
 
-                <!-- Gemini sentence-formation layer (extra output; detected words stay unchanged) -->
+                <!-- Gemini sentence-formation layer (Prominent Generated Sentence Main Box) -->
                 <div class="gemini-sentence-row" aria-live="polite">
-                  <span class="gemini-sentence-label">Generated Sentence</span>
-                  <span id="gemini-sentence-display" class="gemini-sentence-text placeholder-text">Appears after signs are detected.</span>
-                  <span class="tech-chip mono-val" id="gemini-sentence-status">GEMINI</span>
+                  <div class="gemini-sentence-header">
+                    <span class="gemini-sentence-label">Generated Sentence</span>
+                    <span class="tech-chip mono-val" id="gemini-sentence-status">GEMINI</span>
+                  </div>
+                  <div id="gemini-sentence-display" class="gemini-sentence-text placeholder-text">
+                    Appears after signs are detected.
+                  </div>
                 </div>
 
                 <div class="card-actions-row" style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
@@ -623,7 +610,7 @@
                 </div>
               </div>
 
-              <!-- Card B: Local Language Translation (Auto Height) -->
+              <!-- Card B: Local Language Translation (Compact Secondary Panel) -->
               <div class="card card-translation">
                 <div class="card-title-compact-row">
                   <div style="display:flex; align-items:center; gap:8px;">
@@ -643,7 +630,7 @@
                   Waiting for recognized signs to translate...
                 </div>
 
-                <div class="card-actions-row" style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                <div class="card-actions-row" style="display: flex; align-items: center; gap: 6px;">
                   <button type="button" id="btn-trigger-translate" class="btn btn-primary btn-sm">Translate</button>
                   <button type="button" id="btn-speak-translation" class="btn btn-secondary btn-sm">
                     <svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
@@ -1125,7 +1112,7 @@
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <script src="app.js?v=8.0"></script>
-  <script src="landing.js?v=8.0"></script>
+  <script src="app.js?v=9.0"></script>
+  <script src="landing.js?v=9.0"></script>
 </body>
 </html>

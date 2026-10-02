@@ -67,8 +67,8 @@ class GeminiSentenceFormer:
         self._cooldown: dict = {}   # model -> time until which it is skipped (quota / not found)
 
     def _models(self) -> List[str]:
-        primary = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-        models = [primary, "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+        primary = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+        models = [primary, "gemini-3.5-flash-lite", "gemini-flash-latest"]
         now = time.time()
         return [m for m in dict.fromkeys(models) if self._cooldown.get(m, 0) <= now]
 

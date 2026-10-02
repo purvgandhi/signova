@@ -3,10 +3,10 @@ recognition:
   labels_path: "models/lstm_gesture_labels.pkl"
   buffer_size: 30
   feature_dim: 126
-  target_stable_frames: 8
-  accept_threshold: 0.70
-  reject_threshold: 0.50
-  cooldown_frames: 8
+  target_stable_frames: 7
+  accept_threshold: 0.65
+  reject_threshold: 0.45
+  cooldown_frames: 6
   pause_threshold_seconds: 1.2
   repeat_gesture_window_ms: 1200
   sequence_max_length: 20

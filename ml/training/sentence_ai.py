@@ -21,9 +21,11 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 # The vocabulary saved with lstm_gesture_model.keras.  Do not add labels here
 # without retraining the model and updating its saved label file.
 TRAINED_LABELS = frozenset({
-    "hello", "yes", "no", "please", "thankyou", "water", "food", "help",
-    "stop", "good", "bad", "more", "where", "what", "name", "home",
-    "school", "doctor", "pain", "happy",
+    "accident", "bad", "call", "doctor", "food",
+    "good", "happy", "hello", "help", "home",
+    "hot", "lose", "more", "name", "no",
+    "pain", "please", "school", "stop", "thankyou",
+    "thief", "water", "what", "where", "yes"
 })
 
 # Exactly 100 controlled examples.  Every input token is a trained LSTM label.

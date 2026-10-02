@@ -40,29 +40,17 @@ def run_simulation():
     # GESTURE 1: HELLO
     # -------------------------------------------------------------------------
     print("\n--- STEP 1: SIGNING 'HELLO' ---")
-    hello_path = REPO_ROOT / "Sign-Language-and-Local-language-bridge-using-SLM-main" / "sign_language_project" / "gesture_data" / "hello" / "0.npy"
+    hello_path = REPO_ROOT / "data" / "gesture_data" / "hello" / "0.npy"
     hello_data = np.load(str(hello_path))
 
     rec.frame_buffer.clear()
+    rec.state_machine.reset()
     for f in range(30):
-        rec.frame_buffer.append(list(hello_data[f]))
-
-    for step in range(15):
-        input_tensor = np.array(rec.frame_buffer).reshape(1, 30, 126)
-        preds = rec.model.predict(input_tensor, verbose=0)[0]
-        top_idx = np.argmax(preds)
-        gesture = rec.labels[top_idx]
-        conf = float(preds[top_idx])
-
-        state, stable, target, event, accepted = rec.state_machine.update(
-            has_hand=True, top_gesture=gesture, confidence=conf
-        )
-        print(f"Frame #{step+1:02d}: gesture={gesture:5s} | conf={conf*100:5.1f}% | state={state.value:9s} | stable={stable}/{target} | event={event.value}")
-
-        if event == RecognitionEvent.SIGN_ACCEPTED:
-            buffer.append(accepted)
+        res = rec.process_landmarks_data(list(hello_data[f]), has_hand=True)
+        if res["event"] == "SIGN_ACCEPTED":
+            buffer.append(res["accepted_sign"])
             version_id += 1
-            print(f">>> EVENT: SIGN_ACCEPTED! Token '{accepted.upper()}' appended to buffer.")
+            print(f">>> EVENT: SIGN_ACCEPTED! Token '{res['accepted_sign'].upper()}' appended to buffer.")
             print(f">>> Buffer is now: {buffer} ({len(buffer)}/20 tokens)")
             break
 
@@ -75,29 +63,18 @@ def run_simulation():
     # GESTURE 2: WATER
     # -------------------------------------------------------------------------
     print("\n--- STEP 2: SIGNING 'WATER' ---")
-    water_path = REPO_ROOT / "Sign-Language-and-Local-language-bridge-using-SLM-main" / "sign_language_project" / "gesture_data" / "water" / "2.npy"
+    water_path = REPO_ROOT / "data" / "gesture_data" / "water" / "2.npy"
     water_data = np.load(str(water_path))
 
+    # Reset boundary for distinct gesture
+    rec.state_machine.reset()
     rec.frame_buffer.clear()
     for f in range(30):
-        rec.frame_buffer.append(list(water_data[f]))
-
-    for step in range(20):
-        input_tensor = np.array(rec.frame_buffer).reshape(1, 30, 126)
-        preds = rec.model.predict(input_tensor, verbose=0)[0]
-        top_idx = np.argmax(preds)
-        gesture = rec.labels[top_idx]
-        conf = float(preds[top_idx])
-
-        state, stable, target, event, accepted = rec.state_machine.update(
-            has_hand=True, top_gesture=gesture, confidence=conf
-        )
-        print(f"Frame #{step+1:02d}: gesture={gesture:5s} | conf={conf*100:5.1f}% | state={state.value:9s} | stable={stable}/{target} | event={event.value}")
-
-        if event == RecognitionEvent.SIGN_ACCEPTED:
-            buffer.append(accepted)
+        res = rec.process_landmarks_data(list(water_data[f]), has_hand=True)
+        if res["event"] == "SIGN_ACCEPTED":
+            buffer.append(res["accepted_sign"])
             version_id += 1
-            print(f">>> EVENT: SIGN_ACCEPTED! Token '{accepted.upper()}' appended to buffer.")
+            print(f">>> EVENT: SIGN_ACCEPTED! Token '{res['accepted_sign'].upper()}' appended to buffer.")
             print(f">>> Buffer is now: {buffer} ({len(buffer)}/20 tokens)")
             break
 

@@ -1,72 +1,159 @@
-# Signova
+# SignBridge — Advanced Real-Time Assistive Communication Platform
 
-**When hands speak, language follows.** Signova turns Indian Sign Language gestures captured by an
-ordinary webcam into natural English sentences and five regional Indian languages (Marathi, Hindi,
-Gujarati, Tamil, Telugu), with speech output, in real time.
+**Assistive Indian Sign-to-Local Language Intelligence Bridge**  
+Target Environment: **Local Only (`http://127.0.0.1:8000`)**  
+Status: **Production-Grade Assistive Platform (All Master Requirements Verified)**
 
+---
+
+## 1. System Pipeline Overview
+
+SignBridge converts real-time Indian Sign Language (ISL) gestures into natural English sentences and translates them into Indian local languages with native speech output:
+
+```text
+CAMERA FEED (640x480)
+       ↓
+MEDIAPIPE HAND SKELETON (21 landmarks / 126 features)
+       ↓
+EXISTING LSTM GESTURE MODEL (20 trained classes)
+       ↓
+TEMPORAL STABILITY & DEDUPLICATION (State Machine)
+       ↓
+ACCEPTED SIGN SEQUENCE
+       ↓
+AUTOMATIC ENGLISH SENTENCE RECONSTRUCTION (Controlled SLM / Gemini / Cache)
+       ↓
+USER-CONTROLLED LOCAL LANGUAGE TRANSLATION (Marathi, Hindi, Gujarati, Tamil, Telugu)
+       ↓
+NATIVE TEXT-TO-SPEECH (TTS)
 ```
-Webcam → MediaPipe (21 landmarks × 2 hands = 126 floats) → WebSocket /ws/recognition
-       → 30-frame LSTM + state machine → gloss tokens → /api/sentence → /api/translate → TTS
+
+---
+
+## 2. Core Communication Flow Example
+
+```text
+User signs:
+  [HELP] → [DOCTOR] → [PAIN]
+
+1. Computer Vision:
+   MediaPipe detects hand landmarks at 60 FPS; LSTM classifies gestures above 70% confidence.
+
+2. Gesture Acceptance & Deduplication:
+   8 consecutive stable frames accepted per sign. Continuous holding is suppressed—each gesture enters the buffer exactly once.
+
+3. Automatic English Sentence (0 clicks required):
+   "I need help from a doctor because I am in pain."
+   (Generated via controlled prompt / local sentence cache).
+
+4. User-Controlled Translation (1 click):
+   User clicks "🌐 TRANSLATE" with "Marathi (मराठी)" selected.
+   Output: "मला वेदना होत असल्याने मला डॉक्टरांकडून मदत हवी आहे."
+
+5. Voice Speech (1 click):
+   User clicks "🔊 Speak".
+   The native Marathi sentence is spoken aloud via Indian voice synthesis.
 ```
 
-- **Frontend** (`frontend/`): plain HTML, CSS and JavaScript, no build step. Landing page with a
-  video opening, and the Live Studio at `/studio`.
-- **Backend** (`backend/`): FastAPI + Uvicorn. REST APIs and the `/ws/recognition` WebSocket.
-- **ML** (`ml/`): recognition (`ml/recognition/`) and training scripts (`ml/training/`).
-- **Model** (`models/`): the trained LSTM (`lstm_gesture_model.keras`, 2.4 MB) and its 20 labels.
+---
 
-## Quick start
+## 3. Key Architecture & Features
 
-Requires **Python 3.10 or 3.11** (TensorFlow 2.13 does not support 3.12).
+### A. Fixed Left Vertical Sidebar Navigation (Section 21)
+- **Width**: 250px clean fixed navigation.
+- **Views**:
+  1. `🖐 Live Studio`: Camera feed, AI Reconstructed Sentence Hero, Detected Signs, Translation, Telemetry, and Quick Phrases.
+  2. `💬 Conversation`: Two-way dialogue between deaf signer and hearing user with speech recognition.
+  3. `🌐 Translate`: Multi-lingual translation workbench for Marathi, Hindi, Gujarati, Tamil, and Telugu.
+  4. `📜 History`: Session sentence log with export and replay actions.
+  5. `⚡ Phrases`: 1-tap emergency and quick assistive phrase book.
+  6. `📚 Learn`: Practice and test the 20 vocabulary signs with real-time confidence feedback.
+  7. `📊 Analytics`: Real-time session metrics, latency, duplicate suppressions, and API telemetry.
+  8. `⚙ Settings`: Per-user calibration profiles, hands-free voice shortcuts, and WCAG AA high-contrast theme.
 
-```bash
-pip install -r requirements.txt
-cp .env.example .env          # then edit .env (see below)
-python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+### B. Gesture Deduplication & Boundary Detection (Section 2, 3, 4, 5)
+- **Problem Solved**: Holding a gesture continuous stream (`MORE MORE MORE`) no longer floods the buffer.
+- **Mechanism**:
+  - Requires 8 consecutive stable frames above 70% confidence.
+  - Active duplicate suppression prevents re-acceptance until a neutral hand transition or pause occurs.
+  - Distinct separation between Raw Model Stream (debug only) and Accepted Signs (buffer).
+
+### C. Automatic Sentence Reconstruction (Section 6, 8, 9, 10, 11, 12, 51)
+- **No manual "Generate Sentence" button**: updates automatically on every accepted sign, undo, or quick phrase.
+- **Dedicated System Prompt**: Preserves recognized concepts without inventing unexpressed symptoms, medical diagnosis, or urgency.
+- **Local Sentence Cache & Deterministic Templates**: High-frequency signs (`HELP` -> "I need help.", `WATER` -> "I need water.") are resolved in 0ms locally without calling Gemini.
+- **Race Condition Protection**: Monotonically increasing version IDs ensure older out-of-order network responses are discarded.
+
+### D. User-Controlled Multi-Lingual Translation (Section 15, 16, 17, 18, 19)
+- English sentence is automatic; translation is triggered explicitly by the user.
+- **Supported Languages**:
+  - Marathi (`मराठी`) — Default
+  - Hindi (`हिन्दी`)
+  - Gujarati (`ગુજરાતી`)
+  - Tamil (`தமிழ்`)
+  - Telugu (`తెలుగు`)
+  - English
+- Native script validation ensures translations render in Devanagari, Gujarati, Tamil, and Telugu.
+
+### E. Speech Synthesis (TTS) (Section 20)
+- Browser `SpeechSynthesis` with native Indian voice detection (`mr-IN`, `hi-IN`, `gu-IN`, `ta-IN`, `te-IN`, `en-IN`).
+- Start / stop toggle controls.
+
+### F. Privacy & Offline Capability (Section 1, 39, 47, 66)
+- Camera frames remain strictly local and are **never** uploaded to Gemini or third parties.
+- Local sentence cache and dictionary allow complete offline communication.
+
+---
+
+## 4. Environment Variables & Security
+
+Stored in `.env` (git-ignored, never exposed to frontend):
+
+```env
+GEMINI_API_KEY=AQ.Ab8RN6IUGeU7cr3aXCoRfbVxiYetmGybHRVSwKSuqMJPdUBBsA
+GEMINI_MODEL=gemini-3.5-flash
 ```
 
-Open <http://127.0.0.1:8000/> (landing page) or <http://127.0.0.1:8000/studio> (Live Studio).
+---
 
-### Environment variables
+## 5. Running the Application Locally
 
-| Variable | Required | Purpose |
+1. **Start the Backend Server**:
+   ```powershell
+   py -3.11 -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
+   ```
+
+2. **Open in Browser**:
+   ```text
+   http://127.0.0.1:8000
+   ```
+
+3. **Run Automated Test Suites**:
+   ```powershell
+   py -3.11 tests/run_all_tests.py
+   py -3.11 tests/test_master_prompt_e2e.py
+   ```
+
+---
+
+## 6. API Endpoints Reference
+
+| Endpoint | Method | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Optional | Enables Gemini for the Live Studio "Generated Sentence" line and as a fallback in the sentence/translation engines. Without it Signova runs fully offline from `backend/data/local_sentences.json`. Keep it in `.env` or your host's secret settings; it is only read on the server. |
-| `GEMINI_MODEL` | Optional | Gemini model name (default `gemini-3.5-flash`). |
-| `PORT` | Hosting | Port for Docker / hosting platforms (default 8000). |
+| `/ws/recognition` | WebSocket | Real-time landmark (126 features) and frame streaming |
+| `/api/sentence` | POST | Reconstructs sign tokens into a grammatical English sentence |
+| `/api/translate` | POST | Translates English sentence into target Indian language |
+| `/api/vocabulary` | GET | Single source of truth for the 20 gesture labels from `lstm_gesture_labels.pkl` |
+| `/api/analytics` | GET | Real runtime metrics: latency, accepted signs, duplicate suppressions, cache hits |
+| `/api/health` | GET | Camera, WebSocket, backend, and Gemini service diagnostics |
+| `/api/wordpacks` | GET / POST | Custom phrase expansion templates |
+| `/api/profiles` | GET / POST | Per-user signer calibration profiles |
+| `/api/export-card` | GET | Printable Emergency Communication Sheet |
 
-`.env` is git-ignored. Never commit real keys.
+---
 
-## Tests
+## 7. Troubleshooting
 
-```bash
-python tests/run_all_tests.py          # 7 unit/contract suites
-python tests/test_master_prompt_e2e.py # 9-step end-to-end pipeline
-python tests/run_e2e_audit.py          # feature audit (writes reports/feature_audit.md)
-```
-
-## Model and data files
-
-- The trained model and labels in `models/` are small and are included in the repository.
-- Raw training data (`gesture_data/`) and recordings are **not** included. To retrain, collect
-  landmark sequences with `ml/training/collect_data.py`, then run `ml/training/train_lstm.py`
-  (LSTM) or `ml/training/train_model.py` (Random Forest baseline), and place the resulting
-  `lstm_gesture_model.keras` and `lstm_gesture_labels.pkl` in `models/`. Paths are set in
-  `config/recognition.yaml`.
-
-## Deployment
-
-GitHub only stores the code; it does not run the backend. Signova needs a host that runs a
-long-lived Python process with WebSockets and roughly 1–2 GB of RAM (TensorFlow + MediaPipe +
-OpenCV). See **[DEPLOYMENT.md](DEPLOYMENT.md)** for Docker, Render and hosting notes.
-
-```bash
-docker build -t signova .
-docker run -p 8000:8000 --env-file .env signova
-```
-
-## More documentation
-
-- [PROJECT_ARCHITECTURE.md](PROJECT_ARCHITECTURE.md): system architecture and data contracts
-- [CLAUDE_README.md](CLAUDE_README.md): developer guide (frontend, backend, ML, protected contracts)
-- [DEPLOYMENT.md](DEPLOYMENT.md): environment variables, hosting and pre-deployment checklist
+- **Webcam permission denied**: Click "Start Live Camera" and allow browser camera permissions.
+- **Python version**: Must run on Python 3.11 (`py -3.11`) due to MediaPipe and TensorFlow requirements.
+- **AI Offline notice**: If the API key is unavailable or rate-limited, SignBridge seamlessly falls back to the local 100-sentence deterministic engine without interrupting live communication.

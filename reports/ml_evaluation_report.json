@@ -1,0 +1,223 @@
+{
+  "timestamp": "2026-10-02 13:15:37",
+  "num_classes": 25,
+  "classes": [
+    "accident",
+    "bad",
+    "call",
+    "doctor",
+    "food",
+    "good",
+    "happy",
+    "hello",
+    "help",
+    "home",
+    "hot",
+    "lose",
+    "more",
+    "name",
+    "no",
+    "pain",
+    "please",
+    "school",
+    "stop",
+    "thankyou",
+    "thief",
+    "water",
+    "what",
+    "where",
+    "yes"
+  ],
+  "split_counts": {
+    "train_augmented": 6080,
+    "val": 128,
+    "test": 124
+  },
+  "rf_metrics": {
+    "test_accuracy": 0.9758064516129032,
+    "macro_f1": 0.9804151404151404,
+    "train_time_sec": 5.7854225635528564
+  },
+  "bilstm_metrics": {
+    "test_accuracy": 0.9919354838709677,
+    "macro_f1": 0.9959899749373434,
+    "weighted_f1": 0.9919152720510954,
+    "macro_precision": 0.9963636363636365,
+    "macro_recall": 0.996,
+    "train_time_sec": 2849.19554066658,
+    "mean_latency_ms": 61.80144800011476,
+    "p95_latency_ms": 72.8061899977547
+  },
+  "per_class_report": {
+    "accident": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 6.0
+    },
+    "bad": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "call": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 6.0
+    },
+    "doctor": {
+      "precision": 0.9090909090909091,
+      "recall": 1.0,
+      "f1-score": 0.9523809523809523,
+      "support": 10.0
+    },
+    "food": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "good": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "happy": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "hello": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "help": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 10.0
+    },
+    "home": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "hot": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 6.0
+    },
+    "lose": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "more": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "name": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "no": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "pain": {
+      "precision": 1.0,
+      "recall": 0.9,
+      "f1-score": 0.9473684210526315,
+      "support": 10.0
+    },
+    "please": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "school": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "stop": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "thankyou": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "thief": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "water": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "what": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "where": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "yes": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4.0
+    },
+    "accuracy": 0.9919354838709677,
+    "macro avg": {
+      "precision": 0.9963636363636365,
+      "recall": 0.996,
+      "f1-score": 0.9959899749373434,
+      "support": 124.0
+    },
+    "weighted avg": {
+      "precision": 0.9926686217008798,
+      "recall": 0.9919354838709677,
+      "f1-score": 0.9919152720510954,
+      "support": 124.0
+    }
+  },
+  "top_confusions": [
+    {
+      "actual": "pain",
+      "predicted": "doctor",
+      "count": 1
+    }
+  ]
+}

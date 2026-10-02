@@ -6,8 +6,19 @@ from sklearn.metrics import accuracy_score, classification_report
 import pickle
 
 # ---- SETTINGS ----
-GESTURES = ['hello', 'yes', 'no', 'please', 'thankyou']
-DATA_FOLDER = 'gesture_data'
+GESTURES = [
+    'accident', 'bad', 'call', 'doctor', 'food',
+    'good', 'happy', 'hello', 'help', 'home',
+    'hot', 'lose', 'more', 'name', 'no',
+    'pain', 'please', 'school', 'stop', 'thankyou',
+    'thief', 'water', 'what', 'where', 'yes'
+]
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+DATA_FOLDER = str(REPO_ROOT / 'data' / 'gesture_data')
+MODEL_SAVE_PATH = str(REPO_ROOT / 'models' / 'gesture_model.pkl')
+LABELS_SAVE_PATH = str(REPO_ROOT / 'models' / 'gesture_labels.pkl')
 
 print("Loading gesture data...")
 
@@ -64,12 +75,13 @@ print("\nDetailed report:")
 print(classification_report(y_test, y_pred, target_names=GESTURES))
 
 # Save the model to a file
-with open('gesture_model.pkl', 'wb') as f:
+with open(MODEL_SAVE_PATH, 'wb') as f:
     pickle.dump(model, f)
 
 # Save gesture labels too
-with open('gesture_labels.pkl', 'wb') as f:
+with open(LABELS_SAVE_PATH, 'wb') as f:
     pickle.dump(GESTURES, f)
 
-print("\nModel saved as 'gesture_model.pkl'")
+print(f"\nModel saved as '{MODEL_SAVE_PATH}'")
+print(f"Labels saved as '{LABELS_SAVE_PATH}'")
 print("You can now run realtime_recognition.py")

@@ -1,12 +1,20 @@
+# Secrets and environment configurations
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+credentials*.json
+service-account*.json
+token.json
+
+# Python caches and bytecode
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.env
-.venv/
-env/
-venv/
-ENV/
+.Python
 build/
 develop-eggs/
 dist/
@@ -22,35 +30,39 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Testing & Coverage
 .pytest_cache/
-*.log
-gesture_data/
-*.keras
-*.pkl
-*.avi
-*.mp4
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.tox/
+.nox/
 
-# Ship the trained recognition model (2.4 MB) and the opening video (4.7 MB) with the app
-!models/*.keras
-!models/*.pkl
-!frontend/assets/videos/*.mp4
-
-# Secrets and credentials: never commit these
-.env.*
-!.env.example
-*.pem
-*.key
-*.p12
-credentials*.json
-service-account*.json
-.huggingface/
-hf_token*
-
-# Local-only folders
-_backup_pre_redesign/
-.claude/
-reports/
-.DS_Store
-Thumbs.db
+# IDE & OS files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files & Logs
+*.log
+*.tmp
+*.temp
+backup_before_master_prompt/
+node_modules/
+.ipynb_checkpoints/
+
+# Raw media archives (if any)
+*.zip
+*.tar
+*.gz
+*.mp4
+*.avi
+*.mov

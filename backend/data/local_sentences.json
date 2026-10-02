@@ -1,8 +1,30 @@
 {
   "vocabulary": [
-    "hello", "yes", "no", "please", "thankyou", "water", "food", "help",
-    "stop", "good", "bad", "more", "where", "what", "name", "home",
-    "school", "doctor", "pain", "happy"
+    "accident",
+    "bad",
+    "call",
+    "doctor",
+    "food",
+    "good",
+    "happy",
+    "hello",
+    "help",
+    "home",
+    "hot",
+    "lose",
+    "more",
+    "name",
+    "no",
+    "pain",
+    "please",
+    "school",
+    "stop",
+    "thankyou",
+    "thief",
+    "water",
+    "what",
+    "where",
+    "yes"
   ],
   "exact_sentences": {
     "hello": "Hello.",
@@ -105,7 +127,18 @@
     "more water please": "More water, please.",
     "more food please": "More food, please.",
     "hello thankyou": "Hello, thank you.",
-    "hello where doctor pain": "Hello, where is the doctor? I am in pain."
+    "hello where doctor pain": "Hello, where is the doctor? I am in pain.",
+    "accident": "There was an accident.",
+    "call": "Please call.",
+    "hot": "It is hot.",
+    "lose": "I lost something.",
+    "thief": "Help, there is a thief!",
+    "call doctor": "Please call a doctor.",
+    "call help": "Please call for help.",
+    "accident doctor": "There was an accident, I need a doctor.",
+    "accident help": "There was an accident, I need help.",
+    "help thief": "Help, there is a thief!",
+    "lose home": "I lost my way home."
   },
   "translations": {
     "hindi": {
@@ -157,7 +190,17 @@
       "Where is the water?": "पानी कहाँ है?",
       "Where is the food?": "खाना कहाँ है?",
       "Hello, where is the doctor? I am in pain.": "नमस्ते, डॉक्टर कहाँ हैं? मुझे दर्द हो रहा है।",
-      "I need help from a doctor because I am in pain.": "मुझे दर्द हो रहा है इसलिए मुझे डॉक्टर से मदद चाहिए।"
+      "I need help from a doctor because I am in pain.": "मुझे दर्द हो रहा है इसलिए मुझे डॉक्टर से मदद चाहिए।",
+      "There was an accident.": "दुर्घटना हो गई है।",
+      "Please call.": "कृपया कॉल करें।",
+      "It is hot.": "बहुत गर्मी है।",
+      "I lost something.": "मेरी कोई चीज़ खो गई है।",
+      "Help, there is a thief!": "मदद करो, चोर आया है!",
+      "Please call a doctor.": "कृपया डॉक्टर को कॉल करें।",
+      "Please call for help.": "कृपया मदद के लिए कॉल करें।",
+      "There was an accident, I need a doctor.": "दुर्घटना हो गई है, मुझे डॉक्टर चाहिए।",
+      "There was an accident, I need help.": "दुर्घटना हो गई है, मुझे मदद चाहिए।",
+      "I lost my way home.": "मैं घर का रास्ता भूल गया हूँ।"
     },
     "marathi": {
       "I need help from a doctor because I am in pain.": "मला वेदना होत असल्याने मला डॉक्टरांकडून मदत हवी आहे.",
@@ -208,7 +251,17 @@
       "I have more pain.": "मला जास्त वेदना होत आहेत.",
       "Where is the water?": "पाणी कुठे आहे?",
       "Where is the food?": "अन्न कुठे आहे?",
-      "Hello, where is the doctor? I am in pain.": "नमस्कार, डॉक्टर कुठे आहेत? मला वेदना होत आहेत."
+      "Hello, where is the doctor? I am in pain.": "नमस्कार, डॉक्टर कुठे आहेत? मला वेदना होत आहेत.",
+      "There was an accident.": "अपघात झाला आहे.",
+      "Please call.": "कृपया कॉल करा.",
+      "It is hot.": "खूप गरम होत आहे.",
+      "I lost something.": "माझी वस्तू हरवली आहे.",
+      "Help, there is a thief!": "मदत करा, चोर आला आहे!",
+      "Please call a doctor.": "कृपया डॉक्टरला कॉल करा.",
+      "Please call for help.": "कृपया मदतीसाठी कॉल करा.",
+      "There was an accident, I need a doctor.": "अपघात झाला आहे, मला डॉक्टर हवे आहेत.",
+      "There was an accident, I need help.": "अपघात झाला आहे, मला मदत हवी आहे.",
+      "I lost my way home.": "मी घराचा रस्ता विसरलो आहे."
     }
   },
   "emergency_phrases": [

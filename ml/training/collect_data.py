@@ -14,8 +14,10 @@ GESTURES = [
     'home', 'school', 'doctor', 'pain', 'happy'
 ]
 RECORDINGS_PER_GESTURE = 30
-FRAMES_PER_RECORDING = 30
-DATA_FOLDER = 'gesture_data'
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+DATA_FOLDER = str(REPO_ROOT / 'data' / 'gesture_data')
 
 # ---- SETUP ----
 mp_hands = mp.solutions.hands

@@ -9,13 +9,18 @@ import pickle
 
 # ---- SETTINGS ----
 GESTURES = [
-    'hello', 'yes', 'no', 'please', 'thankyou',
-    'water', 'food', 'help', 'stop', 'good',
-    'bad', 'more', 'where', 'what', 'name',
-    'home', 'school', 'doctor', 'pain', 'happy'
+    'accident', 'bad', 'call', 'doctor', 'food',
+    'good', 'happy', 'hello', 'help', 'home',
+    'hot', 'lose', 'more', 'name', 'no',
+    'pain', 'please', 'school', 'stop', 'thankyou',
+    'thief', 'water', 'what', 'where', 'yes'
 ]
-DATA_FOLDER = 'gesture_data'
-MODEL_SAVE_PATH = 'lstm_gesture_model.keras'
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
+DATA_FOLDER = str(REPO_ROOT / 'data' / 'gesture_data')
+MODEL_SAVE_PATH = str(REPO_ROOT / 'models' / 'lstm_gesture_model.keras')
+LABELS_SAVE_PATH = str(REPO_ROOT / 'models' / 'lstm_gesture_labels.pkl')
 
 print("Loading gesture data...")
 
@@ -103,9 +108,9 @@ loss, accuracy = model.evaluate(X_test, y_test)
 print(f"\nFinal Test Accuracy: {accuracy * 100:.1f}%")
 
 # Save labels
-with open('lstm_gesture_labels.pkl', 'wb') as f:
+with open(LABELS_SAVE_PATH, 'wb') as f:
     pickle.dump(GESTURES, f)
 
 print(f"\nModel saved as '{MODEL_SAVE_PATH}'")
-print("Labels saved as 'lstm_gesture_labels.pkl'")
+print(f"Labels saved as '{LABELS_SAVE_PATH}'")
 print("You can now run realtime_lstm.py")

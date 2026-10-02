@@ -1,14 +1,8 @@
 /**
  * Signova — Landing Story & Presentation Layer
  *
- * Video-first opening with glass burst, compact landing story, interactive pipeline,
+ * True 3D Futuristic Holographic Hand Presentation Layer, Interactive Pipeline,
  * Live Studio preview on the real engines, and Live Studio presentation polish.
- *
- * Rules this file follows:
- * - Never touches the recognition WebSocket, the sign buffer or version_id.
- * - The gesture demo calls the real /api/sentence and /api/translate endpoints.
- * - Every animation loop runs only while its element is on screen, the tab is
- *   visible and the landing page is active, so the Live Studio is never slowed.
  */
 (function () {
   'use strict';
@@ -34,7 +28,7 @@
   const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
   // ==========================================================================
-  // HAND MODEL — MediaPipe 21-landmark topology (same indices as app.js)
+  // TRUE 3D HOLOGRAPHIC HAND MODEL — MediaPipe 21-Landmark Topology & Mesh
   // ==========================================================================
   const HAND = [
     [0.50, 0.92],
@@ -44,6 +38,7 @@
     [0.59, 0.58], [0.61, 0.42], [0.62, 0.31], [0.63, 0.22],
     [0.67, 0.63], [0.71, 0.52], [0.74, 0.44], [0.76, 0.36]
   ];
+
   const CONNECTIONS = [
     [0, 1], [1, 2], [2, 3], [3, 4],
     [0, 5], [5, 6], [6, 7], [7, 8],
@@ -52,6 +47,21 @@
     [13, 17], [17, 18], [18, 19], [19, 20],
     [0, 17]
   ];
+
+  // Secondary fine lattice neural micro-fibers across palm & knuckles
+  const SECONDARY_CONNECTIONS = [
+    [1, 5], [5, 9], [9, 13], [13, 17],
+    [2, 6], [6, 10], [10, 14], [14, 18],
+    [0, 9], [1, 9], [0, 13], [2, 9]
+  ];
+
+  // Translucent holographic 3D glass facets connecting the palm and finger bases
+  const HAND_FACETS = [
+    [0, 1, 2], [0, 2, 5], [0, 5, 9], [0, 9, 13], [0, 13, 17],
+    [2, 5, 9], [5, 9, 13], [9, 13, 17],
+    [5, 6, 10], [10, 6, 9], [9, 10, 14], [14, 10, 13], [13, 14, 18], [18, 14, 17]
+  ];
+
   const FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
   const PALM = [0.52, 0.66];
 
@@ -74,13 +84,12 @@
       for (let k = 1; k < chain.length; k++) {
         const idx = chain[k];
         const [ox, oy] = HAND[idx];
-        // Fold each joint toward a point just above the palm, deeper for tips
         const tx = lerp(base[0], PALM[0], 0.35) + (ox - base[0]) * 0.18;
         const ty = lerp(base[1], PALM[1], 0.55) + 0.02 * k;
         const w = c * (0.35 + 0.22 * k);
         pts[idx][0] = lerp(ox, tx, clamp(w, 0, 1));
         pts[idx][1] = lerp(oy, ty, clamp(w, 0, 1));
-        pts[idx][2] = -0.08 * c * k;
+        pts[idx][2] = -0.10 * c * k;
       }
     });
     return pts;
@@ -90,7 +99,7 @@
     return a.map((v, i) => lerp(v, b[i], t));
   }
 
-  /** Projects unit-space hand points to canvas space. */
+  /** Projects unit-space hand points to 2D canvas space. */
   function projectHand(pts, o) {
     const cos = Math.cos(o.rot || 0);
     const sin = Math.sin(o.rot || 0);
@@ -105,37 +114,287 @@
     });
   }
 
-  /** Glowing wireframe hand; bloom is faked with a wide faint stroke under a thin one. */
+  /** Faint 2D wireframe fallback */
   function drawHand(ctx, P, o) {
+    drawHand3D(ctx, P, o);
+  }
+
+  // Anatomical depth of each landmark: fingertips sit forward in space
+  const HAND_DEPTH = [0.04, -0.02, -0.06, -0.10, -0.13, -0.03, -0.07, -0.10, -0.13, -0.03, -0.07, -0.11, -0.14,
+    -0.03, -0.07, -0.10, -0.13, -0.02, -0.05, -0.08, -0.10];
+
+  /** Perspective 3D projection with 3-axis Euler rotation matrix and focal perspective. */
+  function projectHand3D(pts, o) {
+    const cr = Math.cos(o.rot || 0), sr = Math.sin(o.rot || 0);
+    const cy = Math.cos(o.yaw || 0), sy = Math.sin(o.yaw || 0);
+    const cp = Math.cos(o.pitch || 0), sp = Math.sin(o.pitch || 0);
+    const f = o.focal || 2.4;
+
+    return pts.map(([x, y, z], i) => {
+      const X = (o.mirror ? 1 - x : x) - 0.5;
+      const Y = y - 0.58;
+      const Z = (z || 0) + HAND_DEPTH[i];
+
+      // Roll around Z
+      const x1 = X * cr - Y * sr;
+      const y1 = X * sr + Y * cr;
+      const z1 = Z;
+
+      // Yaw around Y
+      const x2 = x1 * cy + z1 * sy;
+      const y2 = y1;
+      const z2 = -x1 * sy + z1 * cy;
+
+      // Pitch around X
+      const x3 = x2;
+      const y3 = y2 * cp - z2 * sp;
+      const z3 = y2 * sp + z2 * cp;
+
+      // Perspective divide
+      const k = f / (f + z3);
+      const px = o.cx + x3 * o.s * k;
+      const py = o.cy + y3 * o.s * k;
+
+      return [px, py, z3, x3, y3, z3, k, i];
+    });
+  }
+
+  /**
+   * TRUE 3D HOLOGRAPHIC CRYSTAL GLASS HAND RENDERER
+   * Reference-matched: Translucent glass volume with dual-tone refraction (cyan + warm amber wrist),
+   * 21 glowing crystal landmark spheres, neural optical connections, 3D orbital gyro rings,
+   * volumetric caustics, and micro-HUD telemetry crosshairs.
+   */
+  function drawHand3D(ctx, P, o) {
+    o = o || {};
     const alpha = o.alpha == null ? 1 : o.alpha;
     if (alpha <= 0.01) return;
-    const lw = o.lineWidth || 2;
+
+    const t = o.t || 0;
+    const lw = (o.lineWidth || 2) * DPR;
+    const near = (z) => clamp(0.94 - z * 3.6, 0.45, 1.45);
+
+    // Virtual key light in 3D space
+    const L = [-0.45, -0.65, 0.61];
+
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    ctx.strokeStyle = `rgba(37, 99, 235, ${0.22 * alpha})`;
-    ctx.lineWidth = lw * 4.5;
-    ctx.beginPath();
-    CONNECTIONS.forEach(([a, b]) => { ctx.moveTo(P[a][0], P[a][1]); ctx.lineTo(P[b][0], P[b][1]); });
-    ctx.stroke();
+    // ------------------------------------------------------------------------
+    // 1. VOLUMETRIC INTERNAL GLASS CAUSTICS & REFRACTION GLOW
+    // ------------------------------------------------------------------------
+    const pWrist = P[0];
+    const pPalm = P[9];
+    const pThumb = P[2];
 
-    ctx.strokeStyle = `rgba(56, 189, 248, ${0.95 * alpha})`;
-    ctx.lineWidth = lw;
+    // Warm luminous amber/gold sub-surface glow at wrist/thenar root (exact reference match)
+    const wristGlow = ctx.createRadialGradient(pWrist[0] + 15 * DPR, pWrist[1] - 8 * DPR, 0, pWrist[0], pWrist[1], 75 * DPR);
+    wristGlow.addColorStop(0, 'rgba(251, 191, 36, ' + (0.24 * alpha).toFixed(3) + ')');
+    wristGlow.addColorStop(0.4, 'rgba(245, 158, 11, ' + (0.12 * alpha).toFixed(3) + ')');
+    wristGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
+    ctx.fillStyle = wristGlow;
     ctx.beginPath();
-    CONNECTIONS.forEach(([a, b]) => { ctx.moveTo(P[a][0], P[a][1]); ctx.lineTo(P[b][0], P[b][1]); });
-    ctx.stroke();
+    ctx.arc(pWrist[0], pWrist[1], 75 * DPR, 0, Math.PI * 2);
+    ctx.fill();
 
-    const jr = o.jointRadius || lw * 1.5;
-    P.forEach((p, i) => {
-      const tip = i === 0 || i % 4 === 0;
-      const r = tip ? jr * 1.3 : jr;
-      ctx.fillStyle = `rgba(56, 189, 248, ${0.18 * alpha})`;
-      ctx.beginPath(); ctx.arc(p[0], p[1], r * 2.8, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = `rgba(240, 249, 255, ${alpha})`;
-      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill();
+    // Deep cyan volumetric palm caustic
+    const palmGlow = ctx.createRadialGradient(pPalm[0], pPalm[1], 0, pPalm[0], pPalm[1], 110 * DPR);
+    palmGlow.addColorStop(0, 'rgba(56, 189, 248, ' + (0.32 * alpha).toFixed(3) + ')');
+    palmGlow.addColorStop(0.5, 'rgba(14, 165, 233, ' + (0.16 * alpha).toFixed(3) + ')');
+    palmGlow.addColorStop(1, 'rgba(2, 6, 23, 0)');
+    ctx.fillStyle = palmGlow;
+    ctx.beginPath();
+    ctx.arc(pPalm[0], pPalm[1], 110 * DPR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ------------------------------------------------------------------------
+    // 2. 3D TRANSLUCENT GLASS FACETS (Depth-sorted with Fresnel Edge Shading)
+    // ------------------------------------------------------------------------
+    const facetList = HAND_FACETS.map((fIndices) => {
+      const p0 = P[fIndices[0]];
+      const p1 = P[fIndices[1]];
+      const p2 = P[fIndices[2]];
+      const zAvg = (p0[2] + p1[2] + p2[2]) / 3;
+
+      const v01 = [p1[3] - p0[3], p1[4] - p0[4], p1[5] - p0[5]];
+      const v02 = [p2[3] - p0[3], p2[4] - p0[4], p2[5] - p0[5]];
+
+      let nx = v01[1] * v02[2] - v01[2] * v02[1];
+      let ny = v01[2] * v02[0] - v01[0] * v02[2];
+      let nz = v01[0] * v02[1] - v01[1] * v02[0];
+      const len = Math.hypot(nx, ny, nz) || 1e-4;
+      nx /= len; ny /= len; nz /= len;
+
+      const dotL = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+      const fresnel = Math.pow(1 - Math.abs(nz), 1.5);
+
+      return { p0, p1, p2, zAvg, dotL, fresnel, fIndices };
+    }).sort((a, b) => b.zAvg - a.zAvg);
+
+    ctx.globalCompositeOperation = 'screen';
+    facetList.forEach(({ p0, p1, p2, zAvg, dotL, fresnel, fIndices }) => {
+      const n = near(zAvg);
+      const isWristFacet = fIndices.includes(0) && (fIndices.includes(1) || fIndices.includes(2));
+      const faceAlpha = (0.06 + dotL * 0.16 + fresnel * 0.10) * alpha * n;
+
+      ctx.beginPath();
+      ctx.moveTo(p0[0], p0[1]);
+      ctx.lineTo(p1[0], p1[1]);
+      ctx.lineTo(p2[0], p2[1]);
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(p0[0], p0[1], (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2);
+      if (isWristFacet) {
+        grad.addColorStop(0, 'rgba(251, 191, 36, ' + (faceAlpha * 1.4).toFixed(3) + ')');
+        grad.addColorStop(0.6, 'rgba(56, 189, 248, ' + (faceAlpha * 0.8).toFixed(3) + ')');
+      } else {
+        grad.addColorStop(0, 'rgba(56, 189, 248, ' + (faceAlpha * 1.3).toFixed(3) + ')');
+        grad.addColorStop(0.5, 'rgba(14, 165, 233, ' + (faceAlpha * 0.7).toFixed(3) + ')');
+      }
+      grad.addColorStop(1, 'rgba(224, 242, 254, ' + (faceAlpha * (0.8 + dotL * 0.7)).toFixed(3) + ')');
+
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Subtle glass facet refraction outline
+      ctx.strokeStyle = 'rgba(186, 230, 253, ' + (0.16 * alpha * n).toFixed(3) + ')';
+      ctx.lineWidth = 0.85 * DPR;
+      ctx.stroke();
     });
+
+    // ------------------------------------------------------------------------
+    // 3. 3D VOLUMETRIC GLASS CYLINDER BONES & CAUSTIC TUBES
+    // ------------------------------------------------------------------------
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Secondary micro-neural lattice lines
+    SECONDARY_CONNECTIONS.forEach(([a, b]) => {
+      const pA = P[a], pB = P[b];
+      const zM = (pA[2] + pB[2]) / 2;
+      const n = near(zM);
+      ctx.strokeStyle = 'rgba(56, 189, 248, ' + (0.20 * alpha * n).toFixed(3) + ')';
+      ctx.lineWidth = 0.9 * DPR;
+      ctx.beginPath();
+      ctx.moveTo(pA[0], pA[1]);
+      ctx.lineTo(pB[0], pB[1]);
+      ctx.stroke();
+    });
+
+    // Primary skeletal connections with volumetric glass capsule thickness
+    const segs = CONNECTIONS.map(([a, b]) => {
+      const zMid = (P[a][2] + P[b][2]) / 2;
+      return { a, b, zMid };
+    }).sort((u, v) => v.zMid - u.zMid);
+
+    // Deep cyan bloom underlay
+    segs.forEach(({ a, b, zMid }) => {
+      const n = near(zMid);
+      ctx.strokeStyle = 'rgba(2, 132, 199, ' + (0.24 * alpha * n).toFixed(3) + ')';
+      ctx.lineWidth = lw * 5.2 * n;
+      ctx.beginPath();
+      ctx.moveTo(P[a][0], P[a][1]);
+      ctx.lineTo(P[b][0], P[b][1]);
+      ctx.stroke();
+    });
+
+    // Volumetric glass cylinder with Fresnel edge reflections
+    segs.forEach(({ a, b, zMid }) => {
+      const n = near(zMid);
+      const isBase = a === 0 || a === 5 || a === 9 || a === 13 || a === 17;
+      const boneWidth = (isBase ? lw * 2.3 : lw * 1.6) * n;
+
+      // Outer glass capsule rim
+      ctx.strokeStyle = 'rgba(56, 189, 248, ' + (0.88 * alpha * clamp(n, 0.5, 1.25)).toFixed(3) + ')';
+      ctx.lineWidth = boneWidth;
+      ctx.beginPath();
+      ctx.moveTo(P[a][0], P[a][1]);
+      ctx.lineTo(P[b][0], P[b][1]);
+      ctx.stroke();
+
+      // Sharp white specular optical spine
+      ctx.strokeStyle = 'rgba(240, 249, 255, ' + (0.95 * alpha * clamp(n, 0.65, 1.0)).toFixed(3) + ')';
+      ctx.lineWidth = Math.max(0.9 * DPR, boneWidth * 0.32);
+      ctx.beginPath();
+      ctx.moveTo(P[a][0], P[a][1]);
+      ctx.lineTo(P[b][0], P[b][1]);
+      ctx.stroke();
+    });
+
+    // ------------------------------------------------------------------------
+    // 4. 3D HOLOGRAPHIC GYRO RINGS (Multi-axis Orbitals around Wrist & Palm)
+    // ------------------------------------------------------------------------
+    if (o.showGyro !== false) {
+      const nWrist = near(pWrist[2]);
+      const rWrist = 24 * DPR * nWrist;
+      const angleW = t * 0.75;
+
+      ctx.save();
+      ctx.translate(pWrist[0], pWrist[1]);
+      ctx.scale(1, 0.36);
+      ctx.rotate(angleW);
+
+      ctx.strokeStyle = 'rgba(56, 189, 248, ' + (0.50 * alpha * nWrist).toFixed(3) + ')';
+      ctx.lineWidth = 1.3 * DPR;
+      ctx.setLineDash([5 * DPR, 6 * DPR]);
+      ctx.beginPath();
+      ctx.arc(0, 0, rWrist, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(224, 242, 254, ' + (0.80 * alpha * nWrist).toFixed(3) + ')';
+      ctx.lineWidth = 1.8 * DPR;
+      ctx.setLineDash([2 * DPR, 16 * DPR]);
+      ctx.beginPath();
+      ctx.arc(0, 0, rWrist * 1.3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ------------------------------------------------------------------------
+    // 5. 3D CRYSTAL LANDMARK SPHERES (Depth-sorted with Dual-Tone Highlights)
+    // ------------------------------------------------------------------------
+    const sortedPoints = P.map((p, i) => ({ p, i })).sort((u, v) => v.p[2] - u.p[2]);
+
+    sortedPoints.forEach(({ p, i }) => {
+      const n = near(p[2]);
+      const tip = i === 0 || i % 4 === 0;
+      const baseR = (tip ? 4.5 : 3.0) * DPR;
+
+      // Independent harmonic breathing pulse per landmark
+      const pulse = 1 + 0.16 * Math.sin(t * 2.3 + i * 0.82);
+      const r = baseR * n * pulse;
+
+      // Outer cyan bloom aura
+      const aura = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r * 3.4);
+      aura.addColorStop(0, 'rgba(56, 189, 248, ' + (0.50 * alpha * n).toFixed(3) + ')');
+      aura.addColorStop(0.5, 'rgba(2, 132, 199, ' + (0.20 * alpha * n).toFixed(3) + ')');
+      aura.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = aura;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], r * 3.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3D Glass Sphere Body with off-center specular hotspot
+      const specX = p[0] - r * 0.35;
+      const specY = p[1] - r * 0.35;
+      const sphereGrad = ctx.createRadialGradient(specX, specY, r * 0.08, p[0], p[1], r);
+      sphereGrad.addColorStop(0, 'rgba(255, 255, 255, ' + (0.99 * alpha).toFixed(3) + ')');
+      sphereGrad.addColorStop(0.25, 'rgba(224, 242, 254, ' + (0.94 * alpha).toFixed(3) + ')');
+      sphereGrad.addColorStop(0.65, 'rgba(56, 189, 248, ' + (0.85 * alpha * n).toFixed(3) + ')');
+      sphereGrad.addColorStop(1, 'rgba(3, 105, 161, ' + (0.58 * alpha * n).toFixed(3) + ')');
+
+      ctx.fillStyle = sphereGrad;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pure white specular hotspot pin
+      ctx.fillStyle = 'rgba(255, 255, 255, ' + (alpha * clamp(n, 0.7, 1)).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(specX, specY, Math.max(0.7 * DPR, r * 0.30), 0, Math.PI * 2);
+      ctx.fill();
+    });
+
     ctx.restore();
   }
 
@@ -166,54 +425,45 @@
     if (document.hidden || !isLandingActive()) return;
     let any = false;
     for (const l of loops) {
-      if (l.visible) { l.frame(now / 1000, dt); any = true; }
+      if (l.running) { l.fn(now / 1000, dt); any = true; }
     }
     if (any) rafId = requestAnimationFrame(tick);
   }
 
+  function addLoop(el, fn) {
+    const entry = { el, fn, running: false };
+    loops.push(entry);
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        entry.running = e.isIntersecting;
+        if (entry.running && !rafId) rafId = requestAnimationFrame(tick);
+      });
+    }, { threshold: 0.05 });
+    io.observe(el);
+    entry.running = true;
+    if (!rafId) rafId = requestAnimationFrame(tick);
+  }
+
   function kick() {
-    if (!rafId && !reducedMotion) { lastNow = 0; rafId = requestAnimationFrame(tick); }
+    if (!rafId) rafId = requestAnimationFrame(tick);
   }
 
-  const loopObserver = new IntersectionObserver((entries) => {
-    entries.forEach((e) => {
-      const l = loops.find((x) => x.el === e.target);
-      if (l) l.visible = e.isIntersecting;
-    });
-    kick();
-  }, { rootMargin: '80px' });
-
-  function addLoop(el, frame) {
-    if (!el) return;
-    loops.push({ el, frame, visible: false });
-    loopObserver.observe(el);
-  }
-
-  document.addEventListener('visibilitychange', kick);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && isLandingActive()) kick();
+  });
 
   // ==========================================================================
-  // DEMO DATA — generated by this project's own sentence & translation engines
-  // (used for the hero loop and as an offline copy if the API is unreachable)
+  // DICTIONARY — Fallback phrases for offline demo mode
   // ==========================================================================
-  const DEMO = {
-    'help doctor pain': {
-      text: 'I need help from a doctor because I am in pain.', source: 'exact',
+  const PREVIEW_SENTENCES = {
+    'call doctor': {
+      text: 'Please call a doctor.', source: 'exact',
       tr: {
-        Marathi: 'मला वेदना होत असल्याने मला डॉक्टरांकडून मदत हवी आहे.',
-        Hindi: 'मुझे दर्द हो रहा है इसलिए मुझे डॉक्टर से मदद चाहिए।',
-        Gujarati: 'મને ડૉક્ટરની મદદ જોઈએ છે કારણ કે મને દુખાવો થાય છે.',
-        Tamil: 'எனக்கு வலி இருப்பதால் மருத்துவரிடம் உதவி தேவை.',
-        Telugu: 'నాకు నొప్పిగా ఉన్నందున డాక్టర్ సహాయం కావాలి.'
-      }
-    },
-    'help doctor': {
-      text: 'I need help from a doctor.', source: 'exact',
-      tr: {
-        Marathi: 'मला डॉक्टरांची मदत हवी आहे.',
-        Hindi: 'मुझे डॉक्टर से मदद चाहिए।',
-        Gujarati: 'મને ડૉક્ટરની મદદની જરૂર છે.',
-        Tamil: 'எனக்கு மருத்துவரிடம் இருந்து உதவி தேவை.',
-        Telugu: 'నాకు డాక్టర్ సహాయం కావాలి.'
+        Marathi: 'कृपया डॉक्टरला कॉल करा.',
+        Hindi: 'कृपया डॉक्टर को बुलाएं।',
+        Gujarati: 'કૃપા કરીને ડૉક્ટરને કૉલ કરો.',
+        Tamil: 'தயவுசெய்து ஒரு மருத்துவரை அழைக்கவும்.',
+        Telugu: 'దయచేసి డాక్టర్ని పిలవండి.'
       }
     },
     'please help': {
@@ -234,512 +484,7 @@
   const LANG_CODES = { Marathi: 'mr-IN', Hindi: 'hi-IN', Gujarati: 'gu-IN', Tamil: 'ta-IN', Telugu: 'te-IN' };
 
   // ==========================================================================
-  // 1. OPENING — full-screen two-hand video, then crush → cracks → glass burst → landing
-  //    (falls back to the same scene drawn in Canvas if the video cannot play)
-  // ==========================================================================
-  function initIntro() {
-    const overlay = document.getElementById('intro-cinematic');
-    const canvas = document.getElementById('intro-canvas');
-    const skipBtn = document.getElementById('btn-skip-intro');
-
-    const video = document.getElementById('intro-video');
-
-    if (!root.classList.contains('play-intro') || !overlay || !canvas || reducedMotion) {
-      root.classList.remove('play-intro');
-      if (video) { video.pause(); video.removeAttribute('src'); video.load(); }
-      if (overlay) overlay.remove();
-      setTimeout(revealHero, 120);
-      return;
-    }
-
-    overlay.hidden = false;
-
-    const T_HIT = 1.7;         // hands collide
-    const T_CRACK = 1.9;       // cracks start after the crush
-    const T_SHATTER = 2.55;    // glass breaks, landing emerges behind the shards
-    const T_END = 4.3;
-    // ?introSpeed=0.25 slows the intro down for review; default is real time
-    const SPEED = parseFloat((location.search.match(/introSpeed=([\d.]+)/) || [])[1]) || 1;
-    // ?introAt=1.2 holds a single moment of the intro (review only)
-    const HOLD = parseFloat((location.search.match(/introAt=([\d.]+)/) || [])[1]);
-
-    // 'video' plays intro.mp4 first; 'canvas' draws the two hands itself (fallback / ?introMode=canvas)
-    let mode = video && video.getAttribute('src') && !/introMode=canvas/.test(location.search) ? 'video' : 'canvas';
-    let phase = mode === 'video' ? 'video' : 'transition';
-    let snapshot = null;
-
-    let W, H, C, diag, ctx;
-    function resize() {
-      const f = fitCanvas(canvas);
-      ctx = f.ctx; W = f.w; H = f.h;
-      C = [W / 2, H / 2];
-      diag = Math.hypot(W, H);
-    }
-    resize();
-
-    const rand = (a, b) => a + Math.random() * (b - a);
-
-    // Dust with depth for parallax
-    const dust = Array.from({ length: isMobile ? 40 : 80 }, () => ({
-      x: Math.random(), y: Math.random(), z: rand(0.2, 1), p: Math.random() * 6.28
-    }));
-
-    // Sparks from the collision
-    const sparks = Array.from({ length: isMobile ? 90 : 180 }, () => {
-      const a = Math.random() * Math.PI * 2;
-      return { a, v: rand(250, 1500), life: rand(0.5, 1.3), w: rand(0.6, 1.8), white: Math.random() < 0.35 };
-    });
-
-    // Crack rays: jittered polylines from the impact point to beyond the edges
-    const RAYS = isMobile ? 11 : 15;
-    const rays = [];
-    for (let i = 0; i < RAYS; i++) {
-      let a = (i / RAYS) * Math.PI * 2 + rand(-0.12, 0.12);
-      const pts = [[0, 0]];
-      let r = 0;
-      const step = 0.06;
-      while (r < 1.3) {
-        a += rand(-0.14, 0.14);
-        r += step * rand(0.7, 1.3);
-        pts.push([Math.cos(a) * r, Math.sin(a) * r]);
-      }
-      const branches = [];
-      for (let k = 2; k < pts.length - 2; k += 3) {
-        if (Math.random() < 0.55) {
-          let ba = Math.atan2(pts[k][1], pts[k][0]) + (Math.random() < 0.5 ? -1 : 1) * rand(0.4, 0.9);
-          const bp = [pts[k].slice()];
-          for (let s = 0; s < 3; s++) {
-            const last = bp[bp.length - 1];
-            ba += rand(-0.2, 0.2);
-            bp.push([last[0] + Math.cos(ba) * 0.045, last[1] + Math.sin(ba) * 0.045]);
-          }
-          branches.push({ at: Math.hypot(pts[k][0], pts[k][1]), pts: bp });
-        }
-      }
-      rays.push({ pts, branches });
-    }
-    const RINGS = [0, 0.09, 0.2, 0.34, 0.52, 0.76, 1.3];
-
-    function rayPointAt(ray, r) {
-      const p = ray.pts;
-      for (let k = 1; k < p.length; k++) {
-        const r0 = Math.hypot(p[k - 1][0], p[k - 1][1]);
-        const r1 = Math.hypot(p[k][0], p[k][1]);
-        if (r1 >= r) {
-          const t = (r - r0) / Math.max(1e-6, r1 - r0);
-          return [lerp(p[k - 1][0], p[k][0], t), lerp(p[k - 1][1], p[k][1], t)];
-        }
-      }
-      return p[p.length - 1];
-    }
-
-    // Shards: cells between neighbouring rays and rings
-    const shards = [];
-    for (let i = 0; i < RAYS; i++) {
-      const A = rays[i];
-      const B = rays[(i + 1) % RAYS];
-      for (let j = 0; j < RINGS.length - 1; j++) {
-        const poly = j === 0
-          ? [[0, 0], rayPointAt(A, RINGS[1]), rayPointAt(B, RINGS[1])]
-          : [rayPointAt(A, RINGS[j]), rayPointAt(A, RINGS[j + 1]), rayPointAt(B, RINGS[j + 1]), rayPointAt(B, RINGS[j])];
-        const cx = poly.reduce((s, p) => s + p[0], 0) / poly.length;
-        const cy = poly.reduce((s, p) => s + p[1], 0) / poly.length;
-        const d = Math.hypot(cx, cy);
-        shards.push({
-          poly: poly.map(([x, y]) => [x - cx, y - cy]),
-          cx, cy, d,
-          dir: [cx / (d || 1), cy / (d || 1)],
-          spin: rand(-2.2, 2.2),
-          delay: d * 0.32,
-          drift: rand(40, 160),
-          tint: rand(0, 1)
-        });
-      }
-    }
-
-    // Light streaks that race outward when the glass bursts
-    const streaks = Array.from({ length: isMobile ? 36 : 72 }, () => ({
-      a: Math.random() * Math.PI * 2, v: rand(900, 2600), len: rand(60, 260), w: rand(0.6, 2.2), delay: rand(0, 0.12)
-    }));
-
-    function drawStreaks(t) {
-      const u = t - T_SHATTER;
-      if (u < 0 || u > 1.1) return;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      streaks.forEach((s) => {
-        const k = u - s.delay;
-        if (k <= 0) return;
-        const r0 = s.v * k;
-        const r1 = r0 + s.len * (1 + k * 2);
-        const al = clamp(1 - k / 0.8, 0, 1);
-        const cs = Math.cos(s.a), sn = Math.sin(s.a);
-        const g = ctx.createLinearGradient(C[0] + cs * r0, C[1] + sn * r0, C[0] + cs * r1, C[1] + sn * r1);
-        g.addColorStop(0, 'rgba(56, 189, 248, 0)');
-        g.addColorStop(1, `rgba(224, 242, 254, ${al})`);
-        ctx.strokeStyle = g;
-        ctx.lineWidth = s.w;
-        ctx.beginPath();
-        ctx.moveTo(C[0] + cs * r0, C[1] + sn * r0);
-        ctx.lineTo(C[0] + cs * r1, C[1] + sn * r1);
-        ctx.stroke();
-      });
-      ctx.restore();
-    }
-
-    // Shockwave ring from the impact point
-    function drawShockwave(t) {
-      const k = t - T_HIT;
-      if (k < 0 || k > 0.7) return;
-      const r = diag * 0.45 * easeOut(k / 0.7);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(186, 230, 253, ${0.7 * (1 - k / 0.7)})`;
-      ctx.lineWidth = 3 + 10 * (1 - k / 0.7);
-      ctx.beginPath(); ctx.arc(C[0], C[1], r, 0, Math.PI * 2); ctx.stroke();
-      ctx.restore();
-    }
-
-    // Impact "crush": the whole frame compresses inward, then releases
-    function crushScale(t) {
-      const k = (t - T_HIT) / 0.42;
-      if (k <= 0 || k >= 1) return 1;
-      return 1 - 0.075 * Math.sin(Math.PI * k) * (1 - 0.35 * k);
-    }
-
-    function drawDust(t, alpha) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      dust.forEach((d) => {
-        const x = ((d.x + t * 0.01 * d.z) % 1) * W;
-        const y = (d.y + Math.sin(t * 0.6 + d.p) * 0.004) * H;
-        ctx.fillStyle = `rgba(125, 211, 252, ${0.35 * d.z * alpha})`;
-        ctx.beginPath(); ctx.arc(x, y, 0.6 + d.z * 1.4, 0, 6.283); ctx.fill();
-      });
-      ctx.restore();
-    }
-
-    // Hands drift in, then accelerate into the collision
-    const approach = (x) => 0.22 * x + 0.78 * x * x * x;
-
-    function handAt(side, p, t) {
-      const s = Math.min(H * 0.72, W * 0.42);
-      const startX = side < 0 ? s * 0.02 : W - s * 0.02;
-      const endX = C[0] + side * s * 0.2;
-      const breathe = Math.sin(t * 3 + (side < 0 ? 0 : 1.3)) * 0.04;
-      return projectHand(handPose([0.1 + breathe, breathe, breathe, breathe, 0.08 + breathe]), {
-        cx: lerp(startX, endX, p),
-        cy: C[1] + s * 0.05 + Math.sin(t * 2.2 + side) * 6 * (1 - p),
-        s,
-        rot: side * (0.42 - 0.18 * p),
-        mirror: side > 0,
-        yaw: 0.35 * (1 - p)
-      });
-    }
-
-    function drawHands(t) {
-      if (t > T_HIT + 0.35) return;
-      const fade = t < T_HIT ? 1 : 1 - (t - T_HIT) / 0.35;
-      const lw = Math.max(1.4, Math.min(W, H) / 380);
-      [-1, 1].forEach((side) => {
-        const p = approach(clamp(t / T_HIT, 0, 1));
-        // Motion blur: fading ghosts of earlier positions while accelerating
-        for (let k = 4; k >= 1; k--) {
-          const pk = approach(clamp((t - k * 0.035) / T_HIT, 0, 1));
-          if (p - pk < 0.004) continue;
-          drawHand(ctx, handAt(side, pk, t), { alpha: 0.16 * (1 - k / 5) * fade, lineWidth: lw });
-        }
-        const P = handAt(side, p, t);
-        drawHand(ctx, P, { alpha: fade, lineWidth: lw });
-        // Floor reflection
-        ctx.save();
-        const floorY = C[1] + Math.min(H * 0.72, W * 0.42) * 0.36;
-        ctx.translate(0, floorY * 1.35);
-        ctx.scale(1, -0.35);
-        drawHand(ctx, P, { alpha: 0.12 * fade, lineWidth: lw });
-        ctx.restore();
-      });
-    }
-
-    function drawBurst(t) {
-      const k = t - T_HIT;
-      if (k < 0 || k > 1.4) return;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const r = diag * 0.55 * easeOut(clamp(k / 0.55, 0, 1));
-      const a = clamp(1 - k / 0.9, 0, 1);
-      const g = ctx.createRadialGradient(C[0], C[1], 0, C[0], C[1], Math.max(1, r));
-      g.addColorStop(0, `rgba(255, 255, 255, ${0.95 * a})`);
-      g.addColorStop(0.12, `rgba(186, 230, 253, ${0.75 * a})`);
-      g.addColorStop(0.4, `rgba(56, 189, 248, ${0.28 * a})`);
-      g.addColorStop(1, 'rgba(37, 99, 235, 0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-      if (k < 0.22) {
-        ctx.fillStyle = `rgba(224, 242, 254, ${0.62 * (1 - k / 0.22)})`;
-        ctx.fillRect(0, 0, W, H);
-      }
-      sparks.forEach((s) => {
-        if (k > s.life) return;
-        const kk = 2.4;
-        const d1 = s.v * (1 - Math.exp(-kk * k)) / kk;
-        const d0 = s.v * (1 - Math.exp(-kk * Math.max(0, k - 0.045))) / kk;
-        const al = 1 - k / s.life;
-        ctx.strokeStyle = s.white ? `rgba(255,255,255,${al})` : `rgba(125, 211, 252, ${al})`;
-        ctx.lineWidth = s.w;
-        ctx.beginPath();
-        ctx.moveTo(C[0] + Math.cos(s.a) * d0, C[1] + Math.sin(s.a) * d0);
-        ctx.lineTo(C[0] + Math.cos(s.a) * d1, C[1] + Math.sin(s.a) * d1);
-        ctx.stroke();
-      });
-      ctx.restore();
-    }
-
-    function strokePartial(pts, maxR, scale) {
-      ctx.beginPath();
-      ctx.moveTo(C[0] + pts[0][0] * scale, C[1] + pts[0][1] * scale);
-      for (let k = 1; k < pts.length; k++) {
-        const r = Math.hypot(pts[k][0], pts[k][1]);
-        if (r > maxR) break;
-        ctx.lineTo(C[0] + pts[k][0] * scale, C[1] + pts[k][1] * scale);
-      }
-      ctx.stroke();
-    }
-
-    function drawCracks(t) {
-      if (t < T_CRACK) return;
-      const q = easeOut(clamp((t - T_CRACK) / 0.85, 0, 1));
-      const maxR = q * 1.3;
-      const scale = diag * 0.62;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      [[5, 'rgba(56, 189, 248, 0.16)'], [1.3, 'rgba(224, 242, 254, 0.9)']].forEach(([lw, col]) => {
-        ctx.lineWidth = lw;
-        ctx.strokeStyle = col;
-        rays.forEach((ray) => {
-          strokePartial(ray.pts, maxR, scale);
-          ray.branches.forEach((b) => { if (b.at < maxR - 0.05) strokePartial(b.pts, maxR + 1, scale); });
-        });
-        // Ring cracks connect neighbouring rays once the front has passed
-        for (let j = 1; j < RINGS.length - 1; j++) {
-          if (RINGS[j] > maxR - 0.04) continue;
-          ctx.beginPath();
-          for (let i = 0; i <= RAYS; i++) {
-            const p = rayPointAt(rays[i % RAYS], RINGS[j]);
-            const x = C[0] + p[0] * scale;
-            const y = C[1] + p[1] * scale;
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-          }
-          ctx.stroke();
-        }
-      });
-      ctx.restore();
-    }
-
-    // Freeze the video's current frame (same object-fit as on screen) to shatter it
-    function captureFrame() {
-      const off = document.createElement('canvas');
-      off.width = Math.round(W * DPR);
-      off.height = Math.round(H * DPR);
-      const o = off.getContext('2d');
-      o.setTransform(DPR, 0, 0, DPR, 0, 0);
-      o.fillStyle = '#02060F';
-      o.fillRect(0, 0, W, H);
-      const vw = video.videoWidth || 16;
-      const vh = video.videoHeight || 9;
-      const fit = getComputedStyle(video).objectFit === 'contain' ? Math.min : Math.max;
-      const k = fit(W / vw, H / vh);
-      try { o.drawImage(video, (W - vw * k) / 2, (H - vh * k) / 2, vw * k, vh * k); } catch (e) { /* frame not ready */ }
-      return off;
-    }
-
-    function drawShards(t) {
-      const u = t - T_SHATTER;
-      const scale = diag * 0.62;
-      ctx.save();
-      shards.forEach((s) => {
-        const local = clamp((u - s.delay * 0.9) / 1.35, 0, 1);
-        const z = easeIn(local) * 3.2;                       // camera flies forward
-        const alpha = 1 - clamp((local - 0.45) / 0.55, 0, 1);
-        if (alpha <= 0.01) return;
-        const x = C[0] + s.cx * scale * (1 + z * 1.4) + s.dir[0] * s.drift * local;
-        const y = C[1] + s.cy * scale * (1 + z * 1.4) + s.dir[1] * s.drift * local;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(s.spin * local * local);
-        ctx.scale(1 + z, 1 + z);
-        ctx.beginPath();
-        s.poly.forEach(([px, py], i) => {
-          const X = px * scale;
-          const Y = py * scale;
-          if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
-        });
-        ctx.closePath();
-        if (snapshot) {
-          // The video frame itself breaks apart: each shard carries its piece of the image
-          ctx.save();
-          ctx.clip();
-          ctx.globalAlpha = alpha;
-          ctx.drawImage(snapshot, -(C[0] + s.cx * scale), -(C[1] + s.cy * scale), W, H);
-          const sheen = ctx.createLinearGradient(-60, -60, 60, 60);
-          sheen.addColorStop(0, 'rgba(186, 230, 253, 0.22)');
-          sheen.addColorStop(0.5, 'rgba(3, 9, 22, 0.1)');
-          sheen.addColorStop(1, 'rgba(56, 189, 248, 0.14)');
-          ctx.fillStyle = sheen;
-          ctx.fill();
-          ctx.restore();
-          ctx.lineWidth = 1.4 / (1 + z);
-          ctx.strokeStyle = `rgba(224, 242, 254, ${(0.6 + 0.35 * s.tint) * alpha})`;
-          ctx.stroke();
-          ctx.restore();
-          return;
-        }
-        // Dark glass with a faint reflection gradient
-        const g = ctx.createLinearGradient(-60, -60, 60, 60);
-        g.addColorStop(0, `rgba(28, 58, 110, ${0.92 * alpha})`);
-        g.addColorStop(0.5, `rgba(3, 9, 22, ${0.98 * alpha})`);
-        g.addColorStop(1, `rgba(10, 26, 58, ${0.95 * alpha})`);
-        ctx.fillStyle = g;
-        ctx.fill();
-        ctx.lineWidth = 1.2 / (1 + z);
-        ctx.strokeStyle = `rgba(186, 230, 253, ${(0.55 + 0.4 * s.tint) * alpha})`;
-        ctx.stroke();
-        ctx.restore();
-      });
-      ctx.restore();
-    }
-
-    let start = 0;
-    let finished = false;
-    let revealed = false;
-    let raf = 0;
-
-    function beginReveal() {
-      if (revealed) return;
-      revealed = true;
-      overlay.classList.add('revealing');
-      root.classList.add('intro-revealing');
-      setTimeout(revealHero, 180);
-    }
-
-    // Video → transition: snapshot the last frame, then remove the video entirely
-    function startTransition() {
-      if (phase === 'transition') return;
-      phase = 'transition';
-      clearTimeout(safety);
-      if (mode === 'video' && video) {
-        snapshot = captureFrame();
-        ctx.drawImage(snapshot, 0, 0, W, H);   // no blank frame between video and canvas
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-        video.remove();
-        start = 0;           // restart the clock at the impact moment
-        startAt = T_HIT;
-      }
-    }
-
-    function fallbackToCanvas() {
-      if (phase !== 'video') return;
-      mode = 'canvas';
-      phase = 'transition';
-      start = 0;
-      startAt = 0;
-      if (video) { video.pause(); video.removeAttribute('src'); video.load(); video.remove(); }
-    }
-
-    let startAt = 0;
-    let safety = 0;
-    if (mode === 'video') {
-      video.addEventListener('ended', startTransition);
-      video.addEventListener('error', fallbackToCanvas);
-      // If autoplay was blocked or the file is slow, draw the scene instead of waiting on a black screen
-      const bootCheck = setTimeout(() => { if (video.paused || video.readyState < 2 || video.dataset.blocked) fallbackToCanvas(); }, 2500);
-      video.addEventListener('playing', () => clearTimeout(bootCheck), { once: true });
-      safety = setTimeout(startTransition, 15000);
-    }
-
-    function finish() {
-      if (finished) return;
-      finished = true;
-      cancelAnimationFrame(raf);
-      clearTimeout(safety);
-      if (video && video.isConnected) { video.pause(); video.removeAttribute('src'); video.load(); video.remove(); }
-      beginReveal();
-      overlay.classList.add('done');
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', resize);
-      setTimeout(() => {
-        overlay.remove();
-        root.classList.remove('play-intro', 'intro-revealing');
-        root.classList.add('intro-played');
-      }, 1500);
-    }
-
-    function frame(now) {
-      if (phase === 'video') {             // the <video> is on screen; the canvas stays clear
-        raf = requestAnimationFrame(frame);
-        return;
-      }
-      if (!start) start = now;
-      const t = !isNaN(HOLD) && mode === 'canvas' ? HOLD : startAt + ((now - start) / 1000) * SPEED;
-      if (t < T_SHATTER) {
-        ctx.fillStyle = '#02060F';
-        ctx.fillRect(0, 0, W, H);
-        const k = crushScale(t);
-        ctx.save();
-        ctx.translate(C[0], C[1]);
-        ctx.scale(k, k);
-        ctx.translate(-C[0], -C[1]);
-        if (snapshot) {
-          ctx.drawImage(snapshot, 0, 0, W, H);
-        } else {
-          const vg = ctx.createRadialGradient(C[0], C[1], 0, C[0], C[1], diag * 0.6);
-          vg.addColorStop(0, 'rgba(15, 40, 90, 0.55)');
-          vg.addColorStop(1, 'rgba(2, 6, 15, 0)');
-          ctx.fillStyle = vg;
-          ctx.fillRect(0, 0, W, H);
-          drawDust(t, 1);
-          drawHands(t);
-        }
-        drawCracks(t);
-        ctx.restore();
-        drawShockwave(t);
-        drawBurst(t);
-      } else {
-        beginReveal();
-        ctx.clearRect(0, 0, W, H);
-        drawShards(t);
-        drawStreaks(t);
-        drawBurst(t);
-      }
-      if (t >= T_END && (isNaN(HOLD) || mode === 'video')) { finish(); return; }
-      raf = requestAnimationFrame(frame);
-    }
-
-    // Skip Intro: remove the video and overlay right away and show the home page
-    function skip() {
-      if (finished) return;
-      root.classList.add('intro-skipped');
-      revealHero();
-      finish();
-    }
-
-    function onKey(e) {
-      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); skip(); }
-    }
-
-    skipBtn.addEventListener('click', skip);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', resize);
-    raf = requestAnimationFrame(frame);
-  }
-
-  // ==========================================================================
-  // 2. HERO — wordmark reveal, ambient landmark hand, parallax, cursor glow
+  // HERO — wordmark reveal, ambient landmark hand, parallax, cursor glow
   // ==========================================================================
   function splitWords(el) {
     let i = 0;
@@ -747,9 +492,9 @@
       Array.from(node.childNodes).forEach((child) => {
         if (child.nodeType === 3) {
           const frag = document.createDocumentFragment();
-          child.textContent.split(/(\s+)/).forEach((part) => {
+          child.textContent.split(/(\\s+)/).forEach((part) => {
             if (!part) return;
-            if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(part)); return; }
+            if (/^\\s+$/.test(part)) { frag.appendChild(document.createTextNode(part)); return; }
             const s = document.createElement('span');
             s.className = 'w';
             s.style.setProperty('--i', i++);
@@ -779,95 +524,266 @@
     const canvas = document.getElementById('hero-bg-canvas');
     const parallaxEls = Array.from(document.querySelectorAll('[data-parallax]'));
 
-    // Pointer state: parallax for the panel, attraction for the landmarks
+    // Pointer state: spring-damped parallax and 3D angle influence
     let mx = 0, my = 0, tmx = 0, tmy = 0;
     const hp = { x: 0, y: 0, on: false };
     const trails = [];
+
     if (finePointer && !reducedMotion) {
       section.addEventListener('pointermove', (e) => {
         const r = section.getBoundingClientRect();
         tmx = ((e.clientX - r.left) / r.width) * 2 - 1;
         tmy = ((e.clientY - r.top) / r.height) * 2 - 1;
         const cr = canvas.getBoundingClientRect();
-        hp.x = e.clientX - cr.left; hp.y = e.clientY - cr.top; hp.on = true;
+        hp.x = e.clientX - cr.left;
+        hp.y = e.clientY - cr.top;
+        hp.on = true;
+
         const panel = parallaxEls[0];
         if (panel) {
           const pr = panel.getBoundingClientRect();
-          panel.style.setProperty('--px', `${(((e.clientX - pr.left) / pr.width) * 100).toFixed(1)}%`);
-          panel.style.setProperty('--py', `${(((e.clientY - pr.top) / pr.height) * 100).toFixed(1)}%`);
+          panel.style.setProperty('--px', (((e.clientX - pr.left) / pr.width) * 100).toFixed(1) + '%');
+          panel.style.setProperty('--py', (((e.clientY - pr.top) / pr.height) * 100).toFixed(1) + '%');
         }
-        if (trails.length < 50 && Math.random() < 0.6) {
-          trails.push({ x: hp.x, y: hp.y, life: 0, vx: (Math.random() - 0.5) * 20, vy: -8 - Math.random() * 18 });
+
+        if (trails.length < 40 && Math.random() < 0.5) {
+          trails.push({ x: hp.x, y: hp.y, life: 0, vx: (Math.random() - 0.5) * 16, vy: -6 - Math.random() * 14 });
         }
       });
-      section.addEventListener('pointerleave', () => { tmx = 0; tmy = 0; hp.on = false; });
+
+      section.addEventListener('pointerleave', () => {
+        tmx = 0;
+        tmy = 0;
+        hp.on = false;
+      });
     }
 
     let scrollY = 0;
     landing.addEventListener('scroll', () => { scrollY = landing.scrollTop; }, { passive: true });
 
-    const particles = Array.from({ length: isMobile ? 24 : 60 }, () => ({
-      x: Math.random(), y: Math.random(), z: 0.3 + Math.random() * 0.7, s: Math.random() * 6.28
+    // Background depth motes
+    const bgParticles = Array.from({ length: isMobile ? 20 : 45 }, () => ({
+      x: Math.random(),
+      y: Math.random(),
+      z: 0.25 + Math.random() * 0.75,
+      s: Math.random() * 6.28
     }));
-    const soft = (p) => p.map((c) => c * 0.6);   // partial curls keep the ambient hand readable
+
+    // Multi-Axis 3D Orbital Rings with orbiting photon satellites (exact reference match)
+    const orbitalRings = [
+      { radX: 0.62, radY: 0.32, tilt: 0.35, rotZ: -0.22, speed: 0.30, photons: [0, 0.33, 0.66] },
+      { radX: 0.54, radY: 0.28, tilt: -0.42, rotZ: 0.45, speed: -0.24, photons: [0.15, 0.72] },
+      { radX: 0.46, radY: 0.22, tilt: 0.65, rotZ: -0.60, speed: 0.38, photons: [0.45] }
+    ];
+
+    const soft = (p) => p.map((c) => c * 0.65);
     const poses = [POSES.open, soft(POSES.vee), POSES.open, soft(POSES.point)];
 
     function paint(t, dt) {
       const { ctx, w, h } = fitCanvas(canvas);
       ctx.clearRect(0, 0, w, h);
 
-      // Depth particles
+      // 1. Ambient Depth Stars / Photons
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      particles.forEach((p) => {
-        const x = ((p.x * w + mx * 18 * p.z) % w + w) % w;
-        const y = ((((p.y - t * 0.01 * p.z) % 1) + 1) % 1) * h + my * 12 * p.z;
-        ctx.fillStyle = `rgba(125, 211, 252, ${0.14 + 0.3 * p.z * (0.5 + 0.5 * Math.sin(t * 1.6 + p.s))})`;
-        ctx.beginPath(); ctx.arc(x, y, 0.6 + p.z * 1.3, 0, 6.283); ctx.fill();
+      bgParticles.forEach((p) => {
+        const x = ((p.x * w + mx * 16 * p.z) % w + w) % w;
+        const y = ((((p.y - t * 0.008 * p.z) % 1) + 1) % 1) * h + my * 10 * p.z;
+        ctx.fillStyle = 'rgba(125, 211, 252, ' + (0.12 + 0.24 * p.z * (0.5 + 0.5 * Math.sin(t * 1.5 + p.s))).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(x, y, 0.6 + p.z * 1.2, 0, 6.283);
+        ctx.fill();
       });
       ctx.restore();
 
-      // Large ambient landmark hand on the right, slowly changing pose
-      const cyc = (t / 3.2) % poses.length;
+      // 2. Continuous Natural 3D Hand Motion & Pose Interpolation
+      const cyc = (t / 3.4) % poses.length;
       const i = Math.floor(cyc);
       const curl = blendCurl(poses[i], poses[(i + 1) % poses.length], easeInOut(clamp((cyc - i) * 2 - 0.6, 0, 1)))
-        .map((c, k) => c + Math.sin(t * 1.4 + k) * 0.03);
-      const narrow = w < 900;
-      const P = projectHand(handPose(curl), {
-        cx: (narrow ? w * 0.72 : w * 0.76) + mx * 16,
-        cy: h * 0.62 + my * 10 - scrollY * 0.12 + Math.sin(t * 0.8) * 8,   // gentle float
-        s: Math.min(h * 0.95, narrow ? w * 0.9 : w * 0.46),
-        rot: -0.12 + mx * 0.06 + Math.sin(t * 0.5) * 0.03,
-        yaw: mx * 0.3
-      });
-      // Landmarks lean gently toward the cursor
+        .map((c, k) => c + Math.sin(t * 1.35 + k * 0.7) * 0.035);
+
+      const narrow = w < 960;
+      const ultraWide = w >= 1440;
+      const pose = handPose(curl);
+
+      // Strict Right-Side Alignment (outside the left 640px hero panel)
+      const handCenterX = narrow ? w * 0.74 : (ultraWide ? w * 0.75 : w * 0.77);
+      const handCenterY = h * 0.51 - scrollY * 0.10;
+      const handScale = Math.min(h * 0.88, narrow ? w * 0.84 : w * 0.44);
+
+      // Continuous 3D multi-axis rotation (yaw, pitch, roll) + mouse responsiveness
+      const view3D = {
+        cx: handCenterX + mx * 18,
+        cy: handCenterY + my * 10 + Math.sin(t * 0.85) * 11, // Gentle continuous vertical float
+        s: handScale,
+        rot: -0.06 + Math.sin(t * 0.38) * 0.04,              // Subtle natural 3D roll
+        yaw: Math.sin(t * 0.42) * 0.26 + mx * 0.58,         // Smooth continuous 3D yaw orbit + mouse
+        pitch: -0.10 + Math.sin(t * 0.52) * 0.12 - my * 0.35,// Smooth continuous 3D pitch + mouse
+        focal: 2.5
+      };
+
+      // 3. Deep Background Holographic Echo
+      if (!narrow) {
+        const echoView = {
+          cx: view3D.cx + 32 + mx * 24,
+          cy: view3D.cy - 16 + my * 14,
+          s: view3D.s * 0.88,
+          rot: view3D.rot,
+          yaw: view3D.yaw * 1.25,
+          pitch: view3D.pitch * 1.2,
+          focal: 2.5
+        };
+        const echoP = projectHand3D(pose, echoView);
+        drawHand3D(ctx, echoP, { lineWidth: 1.2, alpha: 0.12, t, showGyro: false });
+      }
+
+      // 4. Main 3D Holographic Hand Projection
+      const P = projectHand3D(pose, view3D);
+
+      // Soft interactive attraction toward pointer when nearby
       if (hp.on) {
         P.forEach((p) => {
-          const dx = hp.x - p[0], dy = hp.y - p[1];
+          const dx = hp.x - p[0];
+          const dy = hp.y - p[1];
           const d = Math.hypot(dx, dy);
-          if (d < 160 && d > 0.1) { const k = (1 - d / 160) * 10; p[0] += (dx / d) * k; p[1] += (dy / d) * k; }
+          if (d < 150 && d > 0.1) {
+            const k = (1 - d / 150) * 8;
+            p[0] += (dx / d) * k;
+            p[1] += (dy / d) * k;
+          }
         });
       }
-      const alpha = narrow ? 0.35 : 0.75;
-      drawHand(ctx, P, { lineWidth: 2.2, alpha });
 
+      // 5. Render 3D Orbital Rings (Behind Section: z >= 0)
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      // Connections near the cursor brighten
-      if (hp.on) {
-        ctx.lineCap = 'round';
-        CONNECTIONS.forEach(([a, b]) => {
-          const d = Math.hypot(hp.x - (P[a][0] + P[b][0]) / 2, hp.y - (P[a][1] + P[b][1]) / 2);
-          if (d > 170) return;
-          ctx.strokeStyle = `rgba(224, 242, 254, ${(0.7 * (1 - d / 170) * alpha).toFixed(3)})`;
-          ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.moveTo(P[a][0], P[a][1]); ctx.lineTo(P[b][0], P[b][1]); ctx.stroke();
+      orbitalRings.forEach((ring) => {
+        const ringAngle = t * ring.speed;
+        const rx = ring.radX * handScale;
+        const ry = ring.radY * handScale;
+
+        ctx.save();
+        ctx.translate(view3D.cx, view3D.cy);
+        ctx.rotate(ring.rotZ + view3D.rot);
+        ctx.scale(1, Math.cos(ring.tilt));
+
+        // Back-half dashed orbital track
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.22)';
+        ctx.lineWidth = 1.2 * DPR;
+        ctx.setLineDash([6 * DPR, 10 * DPR]);
+        ctx.beginPath();
+        ctx.arc(0, 0, (rx + ry) / 2, Math.PI, Math.PI * 2);
+        ctx.stroke();
+
+        // Orbiting Photons on back-half
+        ring.photons.forEach((pFrac) => {
+          const ang = ringAngle + pFrac * Math.PI * 2;
+          const sinA = Math.sin(ang);
+          if (sinA < 0) { // Behind
+            const px = Math.cos(ang) * ((rx + ry) / 2);
+            const py = sinA * ((rx + ry) / 2);
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+            ctx.beginPath();
+            ctx.arc(px, py, 2.0 * DPR, 0, Math.PI * 2);
+            ctx.fill();
+          }
         });
+        ctx.restore();
+      });
+      ctx.restore();
+
+      // 6. Draw Primary 3D Hand (Translucent Glass Facets, Volumetric Bones, Crystal Spheres, Gyro Rings)
+      const handAlpha = narrow ? 0.42 : 0.90;
+      drawHand3D(ctx, P, { lineWidth: 2.4, alpha: handAlpha, t, showGyro: true });
+
+      // 7. Render 3D Orbital Rings (Front Section: z < 0 with High Luminosity)
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      orbitalRings.forEach((ring) => {
+        const ringAngle = t * ring.speed;
+        const rx = ring.radX * handScale;
+        const ry = ring.radY * handScale;
+
+        ctx.save();
+        ctx.translate(view3D.cx, view3D.cy);
+        ctx.rotate(ring.rotZ + view3D.rot);
+        ctx.scale(1, Math.cos(ring.tilt));
+
+        // Front-half illuminated orbital track
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.55)';
+        ctx.lineWidth = 1.4 * DPR;
+        ctx.setLineDash([8 * DPR, 8 * DPR]);
+        ctx.beginPath();
+        ctx.arc(0, 0, (rx + ry) / 2, 0, Math.PI);
+        ctx.stroke();
+
+        // Orbiting Photons on front-half with brilliant cyan bloom
+        ring.photons.forEach((pFrac) => {
+          const ang = ringAngle + pFrac * Math.PI * 2;
+          const sinA = Math.sin(ang);
+          if (sinA >= 0) { // In front
+            const px = Math.cos(ang) * ((rx + ry) / 2);
+            const py = sinA * ((rx + ry) / 2);
+
+            const pGlow = ctx.createRadialGradient(px, py, 0, px, py, 10 * DPR);
+            pGlow.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+            pGlow.addColorStop(0.35, 'rgba(56, 189, 248, 0.75)');
+            pGlow.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            ctx.fillStyle = pGlow;
+            ctx.beginPath();
+            ctx.arc(px, py, 10 * DPR, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(px, py, 2.4 * DPR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        ctx.restore();
+      });
+
+      // 8. Micro-HUD Telemetry Corner Brackets (Exact Reference Match)
+      if (!narrow) {
+        const hudBoxW = handScale * 0.95;
+        const hudBoxH = handScale * 1.15;
+        const hx = view3D.cx - hudBoxW * 0.48;
+        const hy = view3D.cy - hudBoxH * 0.52;
+        const bLen = 14 * DPR;
+
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.42)';
+        ctx.lineWidth = 1.2 * DPR;
+        ctx.setLineDash([]);
+
+        // Top-Left bracket
+        ctx.beginPath();
+        ctx.moveTo(hx, hy + bLen);
+        ctx.lineTo(hx, hy);
+        ctx.lineTo(hx + bLen, hy);
+        ctx.stroke();
+
+        // Bottom-Left bracket
+        ctx.beginPath();
+        ctx.moveTo(hx, hy + hudBoxH - bLen);
+        ctx.lineTo(hx, hy + hudBoxH);
+        ctx.lineTo(hx + bLen, hy + hudBoxH);
+        ctx.stroke();
+
+        // Top-Right telemetry badge
+        ctx.fillStyle = 'rgba(224, 242, 254, 0.65)';
+        ctx.font = '600 ' + Math.round(11 * DPR) + 'px var(--font-mono)';
+        ctx.fillText('21 Landmarks', hx + hudBoxW - 80 * DPR, hy + 14 * DPR);
+
+        // Right-side tag
+        ctx.fillStyle = 'rgba(125, 211, 252, 0.55)';
+        ctx.font = '500 ' + Math.round(10 * DPR) + 'px var(--font-mono)';
+        ctx.fillText('Optical SLM Pipeline', hx + hudBoxW - 105 * DPR, hy + hudBoxH * 0.5);
       }
-      // Pulses travelling wrist → fingertip
+
+      // 9. Neural Energy Waves Travelling Wrist -> Fingertips
       FINGERS.forEach((chain, f) => {
-        const ph = ((t * 0.55 + f * 0.19) % 1.8) / 1.8;
-        if (ph > 0.95) return;
+        const ph = ((t * 0.58 + f * 0.18) % 1.7) / 1.7;
+        if (ph > 0.94) return;
         const full = [0].concat(chain);
         const pos = ph * (full.length - 1);
         const k = Math.floor(pos);
@@ -875,21 +791,45 @@
         const b = P[full[Math.min(k + 1, full.length - 1)]];
         const x = lerp(a[0], b[0], pos - k);
         const y = lerp(a[1], b[1], pos - k);
-        const g = ctx.createRadialGradient(x, y, 0, x, y, 12);
-        g.addColorStop(0, `rgba(255,255,255,${0.9 * alpha})`);
-        g.addColorStop(0.35, `rgba(56,189,248,${0.55 * alpha})`);
-        g.addColorStop(1, 'rgba(56,189,248,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(x, y, 12, 0, 6.283); ctx.fill();
+
+        const spark = ctx.createRadialGradient(x, y, 0, x, y, 14 * DPR);
+        spark.addColorStop(0, 'rgba(255, 255, 255, ' + (0.95 * handAlpha).toFixed(3) + ')');
+        spark.addColorStop(0.3, 'rgba(56, 189, 248, ' + (0.65 * handAlpha).toFixed(3) + ')');
+        spark.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = spark;
+        ctx.beginPath();
+        ctx.arc(x, y, 14 * DPR, 0, 6.283);
+        ctx.fill();
       });
-      // Cursor particle trail
+
+      // 10. Interactive Connections Glow near Cursor
+      if (hp.on) {
+        CONNECTIONS.forEach(([a, b]) => {
+          const midX = (P[a][0] + P[b][0]) / 2;
+          const midY = (P[a][1] + P[b][1]) / 2;
+          const d = Math.hypot(hp.x - midX, hp.y - midY);
+          if (d > 160) return;
+          const glowA = (0.75 * (1 - d / 160) * handAlpha).toFixed(3);
+          ctx.strokeStyle = 'rgba(224, 242, 254, ' + glowA + ')';
+          ctx.lineWidth = 2.0 * DPR;
+          ctx.beginPath();
+          ctx.moveTo(P[a][0], P[a][1]);
+          ctx.lineTo(P[b][0], P[b][1]);
+          ctx.stroke();
+        });
+      }
+
+      // 11. Pointer Particle Trail
       for (let n = trails.length - 1; n >= 0; n--) {
         const p = trails[n];
         p.life += dt;
-        if (p.life > 0.9) { trails.splice(n, 1); continue; }
-        p.x += p.vx * dt; p.y += p.vy * dt;
-        ctx.fillStyle = `rgba(125, 211, 252, ${0.6 * (1 - p.life / 0.9)})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, 6.283); ctx.fill();
+        if (p.life > 0.85) { trails.splice(n, 1); continue; }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        ctx.fillStyle = 'rgba(125, 211, 252, ' + (0.6 * (1 - p.life / 0.85)).toFixed(3) + ')';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.6 * DPR, 0, 6.283);
+        ctx.fill();
       }
       ctx.restore();
     }
@@ -901,11 +841,11 @@
     }
 
     addLoop(section, (t, dt) => {
-      mx = lerp(mx, tmx, 0.07);
-      my = lerp(my, tmy, 0.07);
+      mx = lerp(mx, tmx, 0.08);
+      my = lerp(my, tmy, 0.08);
       parallaxEls.forEach((el) => {
         const p = parseFloat(el.dataset.parallax) || 0;
-        el.style.transform = `translate3d(${(mx * 10 * p).toFixed(2)}px, ${(my * 8 * p - scrollY * 0.06 * p).toFixed(2)}px, 0)`;
+        el.style.transform = 'translate3d(' + (mx * 10 * p).toFixed(2) + 'px, ' + (my * 8 * p - scrollY * 0.06 * p).toFixed(2) + 'px, 0)';
       });
       paint(t, dt);
     });
@@ -1028,7 +968,7 @@
         const r = btn.getBoundingClientRect();
         const dx = (e.clientX - (r.left + r.width / 2)) * 0.22;
         const dy = (e.clientY - (r.top + r.height / 2)) * 0.3;
-        btn.style.transform = `translate(${dx.toFixed(1)}px, ${(dy - 2).toFixed(1)}px)`;
+        btn.style.transform = `perspective(500px) translate(${dx.toFixed(1)}px, ${(dy - 2).toFixed(1)}px) rotateX(${(-dy * 0.9).toFixed(1)}deg) rotateY(${(dx * 0.7).toFixed(1)}deg)`;
       });
       btn.addEventListener('pointerleave', () => { btn.style.transform = ''; });
     });
@@ -1073,18 +1013,33 @@
   ];
 
   function initPipeline() {
+    const section = document.getElementById('sec-pipeline');
     const track = document.getElementById('pipeline-track');
     const particle = document.getElementById('pipeline-particle');
     const detail = document.getElementById('pipeline-detail');
-    if (!track || !detail) return;
+    const plane = document.getElementById('pipe3d-plane');
+    const svg = document.getElementById('pipe3d-path');
+    if (!section || !track || !detail) return;
     const numEl = document.getElementById('pipeline-detail-num');
     const titleEl = document.getElementById('pipeline-detail-title');
     const bodyEl = document.getElementById('pipeline-detail-body');
     const techEl = document.getElementById('pipeline-detail-tech');
+    const NS = 'http://www.w3.org/2000/svg';
+
+    // Desktop: nodes stand on a tilted floor and the journey is driven by scrolling.
+    // Phones and reduced motion keep the simple vertical list.
+    const spatial = window.matchMedia('(min-width: 1024px)').matches && !reducedMotion && !!plane && !!svg;
+    if (spatial) {
+      section.classList.add('is-3d');
+      const sticky = document.createElement('div');
+      sticky.className = 'pipe-sticky';
+      while (section.firstChild) sticky.appendChild(section.firstChild);
+      section.appendChild(sticky);
+    }
 
     const nodes = [];
     const links = [];
-    STAGES.forEach((s, i) => {
+    STAGES.forEach((st, i) => {
       if (i > 0) {
         const l = document.createElement('span');
         l.className = 'pipeline-link';
@@ -1096,8 +1051,8 @@
       n.className = 'pipeline-node';
       n.setAttribute('role', 'tab');
       n.setAttribute('aria-selected', 'false');
-      n.innerHTML = `<span class="pipeline-node-dot"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg></span><span>${s.k}</span>`;
-      n.addEventListener('click', () => { pauseUntil = performance.now() + 9000; setStage(i, true); });
+      n.innerHTML = `<span class="pipeline-node-dot"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${st.icon}</svg></span><span class="pipeline-node-label">${st.k}</span>`;
+      n.addEventListener('click', () => { pauseUntil = performance.now() + 9000; setStage(i); });
       track.insertBefore(n, particle);
       nodes.push(n);
     });
@@ -1106,7 +1061,71 @@
     let pauseUntil = 0;
     let arriveTimer = 0;
 
+    // ---- spatial layout: an S-curve across the floor plane ----
+    let pathEl = null, flowEl = null, doneEl = null, pulseEl = null, stopLens = [], pathLen = 0;
+    function layout3D() {
+      const W = plane.clientWidth, H = plane.clientHeight;
+      if (!W || !H) return;
+      const pts = STAGES.map((_, i) => {
+        const u = i / (STAGES.length - 1);
+        return [W * (0.07 + u * 0.86), H * (0.62 - 0.28 * Math.sin(u * Math.PI * 1.15))];
+      });
+      nodes.forEach((n, i) => { n.style.left = `${pts[i][0]}px`; n.style.top = `${pts[i][1]}px`; });
+      // Catmull-Rom → cubic Bézier through the node points
+      let d = `M ${pts[0][0]} ${pts[0][1]}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+        const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+        const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+        d += ` C ${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2[0]} ${p2[1]}`;
+      }
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.innerHTML = `<defs><filter id="pipe-bloom" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <path class="p3-base" d="${d}"/><path class="p3-flow" d="${d}"/><path class="p3-done" d="${d}"/>
+        <circle class="p3-pulse" r="7" filter="url(#pipe-bloom)"/>`;
+      pathEl = svg.querySelector('.p3-base');
+      flowEl = svg.querySelector('.p3-flow');
+      doneEl = svg.querySelector('.p3-done');
+      pulseEl = svg.querySelector('.p3-pulse');
+      pathLen = pathEl.getTotalLength();
+      // Length along the path at each node (sampled)
+      stopLens = pts.map(([x, y]) => {
+        let best = 0, bestD = Infinity;
+        for (let L = 0; L <= pathLen; L += pathLen / 400) {
+          const q = pathEl.getPointAtLength(L);
+          const dd = (q.x - x) ** 2 + (q.y - y) ** 2;
+          if (dd < bestD) { bestD = dd; best = L; }
+        }
+        return best;
+      });
+      doneEl.style.strokeDasharray = `${pathLen} ${pathLen}`;
+      placePulse(stopLens[Math.max(0, current)] || 0);
+      paintDone(stopLens[Math.max(0, current)] || 0);
+    }
+    function placePulse(L) {
+      if (!pulseEl) return;
+      const q = pathEl.getPointAtLength(L);
+      pulseEl.setAttribute('cx', q.x.toFixed(1));
+      pulseEl.setAttribute('cy', q.y.toFixed(1));
+    }
+    function paintDone(L) { if (doneEl) doneEl.style.strokeDashoffset = (pathLen - L).toFixed(1); }
+
+    let tween = 0;
+    function travel(fromL, toL, ms, done) {
+      cancelAnimationFrame(tween);
+      const t0 = performance.now();
+      const step = (now) => {
+        const k = easeInOut(clamp((now - t0) / ms, 0, 1));
+        const L = lerp(fromL, toL, k);
+        placePulse(L); paintDone(L);
+        if (k < 1) tween = requestAnimationFrame(step); else if (done) done();
+      };
+      tween = requestAnimationFrame(step);
+    }
+
+    // ---- flat (phone) layout helpers ----
     function particleTo(i) {
+      if (spatial || !particle) return;
       const dot = nodes[i].querySelector('.pipeline-node-dot');
       const tr = track.getBoundingClientRect();
       const r = dot.getBoundingClientRect();
@@ -1120,21 +1139,29 @@
         n.setAttribute('aria-selected', k === i ? 'true' : 'false');
       });
       links.forEach((l, k) => l.classList.toggle('done', k < i));
-      const s = STAGES[i];
+      section.style.setProperty('--stage', i);
+      const st = STAGES[i];
       numEl.textContent = `${String(i + 1).padStart(2, '0')} / ${String(STAGES.length).padStart(2, '0')}`;
-      titleEl.textContent = s.t;
-      bodyEl.innerHTML = `<span class="fade-swap">${s.b}</span>`;
-      techEl.innerHTML = s.tech.map((x) => `<span class="tech-chip mono-val fade-swap">${x}</span>`).join('');
+      titleEl.textContent = st.t;
+      bodyEl.innerHTML = `<span class="fade-swap">${st.b}</span>`;
+      techEl.innerHTML = st.tech.map((x) => `<span class="tech-chip mono-val fade-swap">${x}</span>`).join('');
       detail.classList.remove('bump');
       void detail.offsetWidth;
       detail.classList.add('bump');
     }
 
-    // The pulse travels first; the stage lights up when the pulse arrives
+    // The pulse travels first; the stage lights up when it arrives
     function setStage(i, immediate) {
+      if (i === current) return;
       const prev = current;
       current = i;
       clearTimeout(arriveTimer);
+      if (spatial && stopLens.length) {
+        const from = stopLens[Math.max(0, prev)] || 0;
+        if (immediate || prev < 0) { placePulse(stopLens[i]); paintDone(stopLens[i]); activate(i); return; }
+        travel(from, stopLens[i], 650 + 120 * Math.abs(i - prev), () => activate(i));
+        return;
+      }
       particleTo(i);
       if (!immediate && prev === i - 1 && i > 0) {
         const l = links[i - 1];
@@ -1147,9 +1174,27 @@
       }
     }
 
+    if (spatial) {
+      layout3D();
+      window.addEventListener('resize', layout3D);
+      // Scroll drives the journey through the pinned section
+      let pending = false;
+      const onScroll = () => {
+        pending = false;
+        const header = 54;
+        const max = section.offsetHeight - (landing.clientHeight - header);
+        const p = clamp((landing.getBoundingClientRect().top + header - section.getBoundingClientRect().top) / Math.max(1, max), 0, 1);
+        section.style.setProperty('--pp', p.toFixed(3));
+        const idx = Math.min(STAGES.length - 1, Math.floor(p * STAGES.length * 0.999));
+        if (performance.now() > pauseUntil) setStage(idx);
+      };
+      landing.addEventListener('scroll', () => { if (!pending) { pending = true; requestAnimationFrame(onScroll); } }, { passive: true });
+      setStage(0, true);
+      return;
+    }
+
     setStage(0, true);
     window.addEventListener('resize', () => particleTo(current));
-
     let visible = false;
     new IntersectionObserver((entries) => {
       visible = entries[0].isIntersecting;
@@ -1260,6 +1305,22 @@
       gaugePct.textContent = `${pct}%`;
     }
 
+    // Pointer over the studio box tilts the camera frame and turns the hand
+    const studioTilt = { x: 0, y: 0, tx: 0, ty: 0 };
+    if (finePointer && !reducedMotion) {
+      box.addEventListener('pointermove', (e) => {
+        const r = box.getBoundingClientRect();
+        studioTilt.tx = ((e.clientX - r.left) / r.width) * 2 - 1;
+        studioTilt.ty = ((e.clientY - r.top) / r.height) * 2 - 1;
+        box.style.setProperty('--sx', studioTilt.tx.toFixed(3));
+        box.style.setProperty('--sy', studioTilt.ty.toFixed(3));
+      });
+      box.addEventListener('pointerleave', () => {
+        studioTilt.tx = 0; studioTilt.ty = 0;
+        box.style.setProperty('--sx', '0'); box.style.setProperty('--sy', '0');
+      });
+    }
+
     function drawHandCanvas(t, dt) {
       if (!canvas) return;
       tele.conf = lerp(tele.conf, tele.target, reducedMotion ? 1 : 0.08);
@@ -1269,9 +1330,14 @@
       ctx.clearRect(0, 0, w, h);
       const curl = blendCurl(tele.lastPose, tele.pose, easeInOut(clamp(tele.poseT, 0, 1)))
         .map((c, i) => c + Math.sin(t * 1.6 + i) * 0.025);
-      const P = projectHand(handPose(curl), { cx: w * 0.5, cy: h * 0.6, s: h * 1.02, rot: Math.sin(t * 0.6) * 0.04 });
+      studioTilt.x = lerp(studioTilt.x, studioTilt.tx, 0.08);
+      studioTilt.y = lerp(studioTilt.y, studioTilt.ty, 0.08);
+      const P = projectHand3D(handPose(curl), {
+        cx: w * 0.5, cy: h * 0.6, s: h * 1.02, rot: Math.sin(t * 0.6) * 0.04,
+        yaw: studioTilt.x * 0.5 + Math.sin(t * 0.4) * 0.12, pitch: -studioTilt.y * 0.25
+      });
       const accepted = tele.state === 'ACCEPTED';
-      drawHand(ctx, P, { lineWidth: 2 });
+      drawHand3D(ctx, P, { lineWidth: 2.2 });
       if (accepted) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -1333,7 +1399,7 @@
     async function run(key) {
       const my = ++runId;
       const signs = key.split(' ');
-      gx.classList.remove('fused', 'linked');
+      gx.classList.remove('fused', 'linked', 'langs-in');
       sentenceEl.innerHTML = '<span class="flow-wait" aria-hidden="true"><i></i><i></i><i></i></span>';
       transEl.textContent = '';
       transEl.classList.remove('show');
@@ -1380,7 +1446,7 @@
       await wait(500 * step);
       if (my !== runId) return;
 
-      gx.classList.add('fused');
+      gx.classList.add('fused', 'langs-in');
       sentence = result.text;
       sentenceEl.innerHTML = sentence.split(' ').map((w, i) =>
         `<span class="gx-word" style="animation-delay:${i * 70 * step}ms">${w}</span>`).join(' ');
@@ -1513,12 +1579,135 @@
   }
 
   // ==========================================================================
+  // 12. IMMERSIVE LAYER — eased scrolling, chapter progress, section depth,
+  //     architecture reveal and the closing scene
+  // ==========================================================================
+  const CHAPTERS = ['sec-hero', 'sec-features', 'sec-pipeline', 'sec-studio', 'sec-research', 'sec-cta'];
+
+  /** Eased wheel scrolling (desktop pointer only). Keyboard, touch and scrollbar stay native. */
+  function initSmoothScroll() {
+    if (!finePointer || reducedMotion) return;
+    landing.style.scrollBehavior = 'auto';
+    let pos = landing.scrollTop;
+    let target = pos;
+    let anim = 0;
+    const max = () => landing.scrollHeight - landing.clientHeight;
+
+    function step() {
+      pos += (target - pos) * 0.11;
+      if (Math.abs(target - pos) < 0.5) pos = target;
+      landing.scrollTop = pos;
+      anim = pos === target ? 0 : requestAnimationFrame(step);
+    }
+    landing.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || !isLandingActive() || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (e.target.closest && e.target.closest('select, textarea, .modal-dialog')) return;
+      const d = e.deltaY * (e.deltaMode === 1 ? 32 : e.deltaMode === 2 ? landing.clientHeight : 1);
+      if (!anim) pos = target = landing.scrollTop;
+      target = clamp(target + d, 0, max());
+      e.preventDefault();
+      if (!anim) anim = requestAnimationFrame(step);
+    }, { passive: false });
+    // Any other scroll (keys, scrollbar, anchor links) re-syncs the eased position
+    landing.addEventListener('scroll', () => { if (!anim) pos = target = landing.scrollTop; }, { passive: true });
+  }
+
+  /** "01 / 06" chapter counter, overall progress bar and per-section depth (--sd). */
+  function initScrollProgress() {
+    const num = document.getElementById('sp-num');
+    const fill = document.getElementById('sp-fill');
+    const wrap = document.getElementById('scroll-progress');
+    const sections = CHAPTERS.map((id) => document.getElementById(id)).filter(Boolean);
+    const heads = Array.from(document.querySelectorAll('#view-landing .section-head'));
+    let chapter = -1;
+    let pending = false;
+
+    function update() {
+      pending = false;
+      const max = Math.max(1, landing.scrollHeight - landing.clientHeight);
+      const top = landing.getBoundingClientRect().top;
+      const mid = top + landing.clientHeight * 0.5;
+      if (fill) fill.style.transform = `scaleY(${(landing.scrollTop / max).toFixed(4)})`;
+      let idx = 0;
+      sections.forEach((sec, i) => { if (sec.getBoundingClientRect().top <= mid) idx = i; });
+      if (idx !== chapter && num) {
+        chapter = idx;
+        num.textContent = String(idx + 1).padStart(2, '0');
+        num.classList.remove('flip');
+        void num.offsetWidth;
+        num.classList.add('flip');
+      }
+      if (wrap) wrap.classList.toggle('visible', landing.scrollTop > 40);
+      if (!reducedMotion) {
+        heads.forEach((h) => {
+          const r = h.getBoundingClientRect();
+          if (r.bottom < top || r.top > top + landing.clientHeight) return;
+          const d = clamp(((r.top + r.height / 2) - mid) / landing.clientHeight, -1, 1);
+          h.style.setProperty('--sd', d.toFixed(3));
+        });
+      }
+    }
+    landing.addEventListener('scroll', () => { if (!pending) { pending = true; requestAnimationFrame(update); } }, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+  }
+
+  /** Architecture layers light up one after another, then data flows between them. */
+  function initResearchStack() {
+    const stack = document.getElementById('arch-stack');
+    if (!stack) return;
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => stack.classList.toggle('flowing', e.isIntersecting));
+      if (entries[0].isIntersecting) stack.classList.add('in');
+    }, { threshold: 0.25 });
+    io.observe(stack);
+  }
+
+  /** Closing scene: a few drifting particles and a faint landmark hand. */
+  function initFinale() {
+    const section = document.getElementById('sec-cta');
+    const canvas = document.getElementById('finale-canvas');
+    if (!section || !canvas) return;
+    const motes = Array.from({ length: isMobile ? 18 : 34 }, () => ({
+      x: Math.random(), y: Math.random(), z: 0.25 + Math.random() * 0.75, s: Math.random() * 6.28
+    }));
+    let mx = 0, my = 0;
+    if (finePointer && !reducedMotion) {
+      section.addEventListener('pointermove', (e) => {
+        const r = section.getBoundingClientRect();
+        mx = ((e.clientX - r.left) / r.width) * 2 - 1;
+        my = ((e.clientY - r.top) / r.height) * 2 - 1;
+      });
+    }
+    function paint(t) {
+      const { ctx, w, h } = fitCanvas(canvas);
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      motes.forEach((p) => {
+        const x = ((p.x * w + Math.sin(t * 0.2 + p.s) * 20 * p.z + mx * 12 * p.z) % w + w) % w;
+        const y = ((((p.y - t * 0.008 * p.z) % 1) + 1) % 1) * h + my * 8 * p.z;
+        ctx.fillStyle = `rgba(125, 211, 252, ${(0.12 + 0.28 * p.z * (0.5 + 0.5 * Math.sin(t * 1.3 + p.s))).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(x, y, 0.6 + p.z * 1.4, 0, 6.283); ctx.fill();
+      });
+      ctx.restore();
+      const P = projectHand3D(handPose(POSES.open.map((c, i) => 0.06 + Math.sin(t * 0.9 + i) * 0.05)), {
+        cx: w * 0.5, cy: h * 0.72 + Math.sin(t * 0.6) * 6, s: Math.min(h * 1.1, w * 0.7),
+        yaw: mx * 0.35 + Math.sin(t * 0.3) * 0.15, pitch: -my * 0.2
+      });
+      drawHand3D(ctx, P, { lineWidth: 1.6, alpha: 0.2 });
+    }
+    if (reducedMotion) { paint(0); window.addEventListener('resize', () => paint(0)); return; }
+    addLoop(section, paint);
+  }
+
+  // ==========================================================================
   // BOOT
   // ==========================================================================
   function boot() {
+    revealHero();
     initViewHooks();
     initHero();
-    initIntro();
     initCursorGlow();
     initReveals();
     initNav();
@@ -1527,6 +1716,10 @@
     initStudioDemo();
     initStudioStatus();
     initStudioFx();
+    initSmoothScroll();
+    initScrollProgress();
+    initResearchStack();
+    initFinale();
     kick();
   }
 

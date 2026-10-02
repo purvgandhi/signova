@@ -1,3 +1,9 @@
+"""
+Signova Real-Time Recognition Engine
+- Integrates MediaPipe hand detection with BiLSTM deep temporal model
+- Invariant coordinate normalization matching training pipeline exactly
+- State machine with sliding window consensus and duplicate suppression
+"""
 from __future__ import annotations
 
 import os
@@ -14,6 +20,7 @@ import mediapipe as mp
 from tensorflow.keras.models import load_model
 
 from ml.recognition.state_machine import RecognitionStateMachine, RecognitionState, RecognitionEvent
+from ml.recognition.normalization import normalize_landmarks_frame, normalize_landmarks_sequence
 
 REPO_ROOT = Path(__file__).parent.parent.parent.resolve()
 CONFIG_FILE = REPO_ROOT / "config" / "recognition.yaml"
@@ -26,29 +33,30 @@ class SignRecognizer:
                 self.config = yaml.safe_load(f).get("recognition", {})
         else:
             self.config = {
-                "model_path": "Sign-Language-and-Local-language-bridge-using-SLM-main/sign_language_project/lstm_gesture_model.keras",
-                "labels_path": "Sign-Language-and-Local-language-bridge-using-SLM-main/sign_language_project/lstm_gesture_labels.pkl",
+                "model_path": "models/lstm_gesture_model.keras",
+                "labels_path": "models/lstm_gesture_labels.pkl",
                 "buffer_size": 30,
-                "target_stable_frames": 8,
-                "accept_threshold": 0.70,
-                "reject_threshold": 0.50,
-                "cooldown_frames": 8
+                "target_stable_frames": 7,
+                "accept_threshold": 0.65,
+                "reject_threshold": 0.45,
+                "cooldown_frames": 6
             }
 
-        model_path = REPO_ROOT / self.config["model_path"]
-        labels_path = REPO_ROOT / self.config["labels_path"]
+        # Resolve model and labels path
+        model_path = REPO_ROOT / self.config.get("model_path", "models/lstm_gesture_model.keras")
+        labels_path = REPO_ROOT / self.config.get("labels_path", "models/lstm_gesture_labels.pkl")
 
         print(f"[SignRecognizer] Loading LSTM model from {model_path}...")
         self.model = load_model(str(model_path))
 
         with open(labels_path, "rb") as f:
             self.labels = pickle.load(f)
-        print(f"[SignRecognizer] Loaded {len(self.labels)} gesture labels.")
+        print(f"[SignRecognizer] Loaded {len(self.labels)} gesture labels: {self.labels}")
 
         self.buffer_size = self.config.get("buffer_size", 30)
         self.frame_buffer = deque(maxlen=self.buffer_size)
 
-        # MediaPipe Hands
+        # MediaPipe Hands (server-side fallback)
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
             max_num_hands=2,
@@ -56,12 +64,12 @@ class SignRecognizer:
             min_tracking_confidence=0.5
         )
 
-        # State Machine with deduplication and boundary detection
+        # State Machine
         self.state_machine = RecognitionStateMachine(
-            target_stable_frames=self.config.get("target_stable_frames", 8),
-            accept_threshold=self.config.get("accept_threshold", 0.70),
-            reject_threshold=self.config.get("reject_threshold", 0.50),
-            cooldown_frames=self.config.get("cooldown_frames", 8),
+            target_stable_frames=self.config.get("target_stable_frames", 7),
+            accept_threshold=self.config.get("accept_threshold", 0.65),
+            reject_threshold=self.config.get("reject_threshold", 0.45),
+            cooldown_frames=self.config.get("cooldown_frames", 6),
             repeat_gesture_window_ms=self.config.get("repeat_gesture_window_ms", 1200)
         )
 
@@ -69,7 +77,7 @@ class SignRecognizer:
 
     def extract_landmarks(self, result) -> List[float]:
         """
-        Matches exact Phase 7 training format (126 features: 63 per hand).
+        Extracts 126 raw features (63 left hand + 63 right hand) from MediaPipe result.
         """
         left_hand = [0.0] * 63
         right_hand = [0.0] * 63
@@ -79,7 +87,7 @@ class SignRecognizer:
                 points = []
                 for lm in hand_landmarks.landmark:
                     points.extend([lm.x, lm.y, lm.z])
-                # Camera frame is mirrored
+                # Camera frame mirrored perspective
                 if handedness.classification[0].label == "Left":
                     right_hand = points
                 else:
@@ -90,11 +98,14 @@ class SignRecognizer:
     def process_landmarks_data(self, features: List[float], has_hand: bool, raw_landmarks: list = None) -> Dict[str, Any]:
         """
         Processes pre-extracted 126-float landmark vector from client-side MediaPipe.
+        Applies invariant landmark normalization before temporal buffering and model inference.
         """
         self.packet_counter += 1
 
         if has_hand and features and len(features) == 126:
-            self.frame_buffer.append(features)
+            # Normalize frame landmarks to ensure exact parity with training
+            norm_frame = normalize_landmarks_frame(features)
+            self.frame_buffer.append(norm_frame)
         else:
             if len(self.frame_buffer) > 0:
                 self.frame_buffer.clear()
@@ -104,12 +115,12 @@ class SignRecognizer:
         confidence = 0.0
 
         if len(self.frame_buffer) > 0 and has_hand:
-            # Immediate inference by padding initial buffer if fewer than 30 frames
             frames = list(self.frame_buffer)
+            # Immediate inference by repeating initial frame if buffer is filling
             if len(frames) < self.buffer_size:
                 frames = [frames[0]] * (self.buffer_size - len(frames)) + frames
 
-            input_tensor = np.array(frames).reshape(1, self.buffer_size, 126)
+            input_tensor = np.array(frames, dtype=np.float32).reshape(1, self.buffer_size, 126)
             preds = self.model.predict(input_tensor, verbose=0)[0]
 
             top_indices = np.argsort(preds)[::-1][:3]
@@ -121,9 +132,6 @@ class SignRecognizer:
 
             top_gesture = top_predictions[0]["gesture"]
             confidence = top_predictions[0]["confidence"]
-
-            preds_str = ", ".join(f"{p['gesture']}: {p['confidence']*100:.1f}%" for p in top_predictions)
-            print(f"[RECOGNITION #{self.packet_counter}] Top-3: {preds_str}")
 
         state, stable_frames, target_stable, event, accepted_sign = self.state_machine.update(
             has_hand=has_hand,
@@ -167,8 +175,9 @@ class SignRecognizer:
                     "landmarks": lms
                 })
 
-            features = self.extract_landmarks(result)
-            self.frame_buffer.append(features)
+            raw_features = self.extract_landmarks(result)
+            norm_features = normalize_landmarks_frame(raw_features)
+            self.frame_buffer.append(norm_features)
         else:
             if len(self.frame_buffer) > 0:
                 self.frame_buffer.clear()
@@ -182,7 +191,7 @@ class SignRecognizer:
             if len(frames) < self.buffer_size:
                 frames = [frames[0]] * (self.buffer_size - len(frames)) + frames
 
-            input_tensor = np.array(frames).reshape(1, self.buffer_size, 126)
+            input_tensor = np.array(frames, dtype=np.float32).reshape(1, self.buffer_size, 126)
             preds = self.model.predict(input_tensor, verbose=0)[0]
 
             top_indices = np.argsort(preds)[::-1][:3]
@@ -194,9 +203,6 @@ class SignRecognizer:
 
             top_gesture = top_predictions[0]["gesture"]
             confidence = top_predictions[0]["confidence"]
-
-            preds_str = ", ".join(f"{p['gesture']}: {p['confidence']*100:.1f}%" for p in top_predictions)
-            print(f"[RECOGNITION #{self.packet_counter}] Top-3: {preds_str}")
 
         state, stable_frames, target_stable, event, accepted_sign = self.state_machine.update(
             has_hand=has_hand,

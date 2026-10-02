@@ -112,8 +112,8 @@ Rules:
 
 class SentenceEngine:
     def __init__(self):
-        self.primary_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-        self.candidate_models = [self.primary_model, "gemini-2.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"]
+        self.primary_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+        self.candidate_models = [self.primary_model, "gemini-3.5-flash-lite", "gemini-flash-latest"]
         self._client = None
         # Section 11: In-memory sentence cache
         self.sentence_cache: Dict[str, str] = {}

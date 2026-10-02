@@ -3,7 +3,6 @@ from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()  # Load .env (GEMINI_API_KEY, GEMINI_MODEL)
 import os
-import json
 import time
 import base64
 from pathlib import Path
@@ -270,6 +269,14 @@ async def serve_app_js():
 @app.get("/style.css")
 async def serve_style_css():
     return _no_cache_response(FRONTEND_DIR / "style.css", "text/css")
+
+@app.get("/landing.js")
+async def serve_landing_js():
+    return _no_cache_response(FRONTEND_DIR / "landing.js", "application/javascript")
+
+@app.get("/landing.css")
+async def serve_landing_css():
+    return _no_cache_response(FRONTEND_DIR / "landing.css", "text/css")
 
 @app.get("/data/local_sentences.json")
 async def serve_local_sentences():
